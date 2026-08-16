@@ -2,17 +2,17 @@
 
 ## Foreword
 
-This project in its entirety is coded by AI. It is "vibe coded."
+This project in its entirety is coded by AI. It is "vibe coded." The premise, as well as ideas for features and iterations are the only human elements. All code for this project (not its dependencies) is AI generated.
 
-I do not have the technical expertise to properly and thoroughly review or permanently maintain this project.
+I do not have the technical expertise to properly and thoroughly review this project's code or permanently maintain this project.
 
 I wanted something like this to exist for a long time, and now it does.
 
 If you are someone who is not okay with the use of AI in coding/creating things, then this project may not be for you. I apologize.
 
-If you are someone who actually knows what they're doing, and ideally a trusted plugin developer already and would like to take over this project, make changes to it, review it, etc, please [open an issue](https://github.com/Bastaklis1/Presetway/issues) or reach out directly.
+If you are someone who actually knows what they're doing, and ideally a trusted plugin and/or addon developer already and would like to take over this project, make changes to it, review it, etc, please [open an issue](https://github.com/Bastaklis1/Presetway/issues) or reach out directly.
 
-Upstream licenses apply wherever their code is used (see Credits below). Anything else in this repo should be considered MIT -- see `LICENSE`.
+Upstream licenses apply wherever their code is used (see Credits below). Anything else in this repo should be considered MIT -- see `LICENSE`. 
 
 ---
 
