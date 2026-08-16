@@ -102,3 +102,5 @@ or tested by anyone besides the author.
 Probably as complete as it's going to get. 
 
 Likely to become abandoned or unmaintained.
+
+Known issue causing crashing on preset switching. I believe it's due to heavier presets and will hopefully address it soon.
