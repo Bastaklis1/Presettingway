@@ -65,7 +65,7 @@ two methods (`GetDisplayedWeather`/`GetDisplayedTime`) exposed on Weatherman's
 IPC surface that do not exist in the upstream release. Until/unless that's
 ever considered:
 
-- Use [this fork](https://github.com/Bastaklis1/Weatherman) instead
+- Use [this fork](https://github.com/Bastaklis1/Weatherman/tree/Presetway_Compatibility) instead
   of upstream Weatherman, **or**
 - Just leave "Check for Weatherman overrides" unchecked in Presetway's
   settings (it's off by default) -- everything else works fine without it,
