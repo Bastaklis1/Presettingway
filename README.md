@@ -96,7 +96,7 @@ separate downloads:
 
 ## Status
 
-Working prototype, tested by hand across multiple sessions, not yet reviewed
+(Not) Working prototype, tested by hand across multiple sessions, not yet reviewed
 or tested by anyone besides the author. 
 
 Probably as complete as it's going to get. 
