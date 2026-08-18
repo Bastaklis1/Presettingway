@@ -102,3 +102,5 @@ or tested by anyone besides the author.
 Probably as complete as it's going to get. 
 
 Likely to become abandoned or unmaintained.
+
+Thought the crash when preset swapping was fixed with the new .addon. It was handling large preset swaps fine, now it's handling no preset swaps without crashing - same as the first iteration. 
