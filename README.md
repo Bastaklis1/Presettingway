@@ -27,7 +27,8 @@ Optional third piece: if you use [Weatherman](https://github.com/NightmareXIV/We
 to force specific weather/time per zone, Presetway can read its override
 state too, so the preset you get matches what Weatherman is actually showing
 rather than the real (unmodified) game state underneath it. See the
-"Weatherman integration" section below.
+"Weatherman integration" section below -- this needs a small addition to
+Weatherman that is offered in a fork linked below until next official build release.
 
 ## Installing (not building from source)
 
@@ -59,13 +60,15 @@ be one. This part is always: download, rename if needed, drop in a folder.
 
 ### Weatherman integration (optional)
 
-Presetway can detect and follow Weatherman's active overrides, but this
-should now be supported when using the Official Weatherman plugin.
+Presetway can detect and follow Weatherman's active overrides, and this
+should be supported when using the Official Weatherman plugin upon its next build release.
 
-- Weatherman should now be supported using the official Dalamud plugin. 
+- Use [this fork](https://github.com/Bastaklis1/Weatherman/tree/Presetway_Compatibility) instead
+  of upstream Weatherman, **or**
 - You can leave "Check for Weatherman overrides" unchecked in Presetway's
   settings if you don't wish to use this integration (it's off by default) -- 
   everything else works fine without it, reading real game state directly.
+- Weatherman should be supported using the official Dalamud plugin upon next build release. 
 
 ## Building from source
 
