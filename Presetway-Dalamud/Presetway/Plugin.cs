@@ -339,6 +339,33 @@ public sealed class Plugin : IDalamudPlugin
     internal TimeOfDay? WeathermanDisplayedTimeOfDay { get; private set; }
 
     /// <summary>
+    /// Accepted Dalamud internal names for a Weatherman-compatible plugin, in
+    /// priority order. "Weatherman" is the official upstream plugin -- once
+    /// NightmareXIV publishes a release build that actually includes
+    /// GetDisplayedWeather/GetDisplayedTime (merged to main, not yet shipped
+    /// as of this writing), this is the only one that matters and the fork
+    /// dependency goes away entirely. "Weatherman-Temp" is the stopgap fork,
+    /// deliberately published under a different InternalName because Dalamud
+    /// won't list a third-party repo's plugin under a name that collides with
+    /// one already known from the official repo.
+    ///
+    /// ECommons' EzIPC derives its channel prefix from the loaded plugin's own
+    /// InternalName when none is explicitly specified (confirmed directly in
+    /// EzIPC.cs: `prefix ??= Svc.PluginInterface.InternalName`), and neither
+    /// Weatherman's IPCProvider nor the fork's ever specifies one. So the
+    /// fork's real IPC channels are "Weatherman-Temp.IsWeatherCustom" etc, not
+    /// "Weatherman.IsWeatherCustom" -- the prefix has to be resolved from
+    /// whichever one is actually loaded, not assumed.
+    /// </summary>
+    private static readonly string[] WeathermanInternalNames = ["Weatherman", "Weatherman-Temp"];
+
+    /// <summary>
+    /// The InternalName that was actually found loaded, used as the IPC
+    /// channel prefix. Null when neither variant is loaded.
+    /// </summary>
+    private string? weathermanInternalName;
+
+    /// <summary>
     /// Explicit existence check via InstalledPlugins, rather than relying purely
     /// on try/catch around the IPC calls -- avoids throwing (and paying .NET's
     /// real exception-handling cost) on every single state change for everyone
@@ -346,8 +373,13 @@ public sealed class Plugin : IDalamudPlugin
     /// there" a direct, visible check rather than an implicit side effect of
     /// error handling.
     /// </summary>
-    private bool IsWeathermanLoaded() =>
-        PluginInterface.InstalledPlugins.Any(p => p.InternalName == "Weatherman" && p.IsLoaded);
+    private bool IsWeathermanLoaded()
+    {
+        weathermanInternalName = PluginInterface.InstalledPlugins
+            .FirstOrDefault(p => WeathermanInternalNames.Contains(p.InternalName) && p.IsLoaded)
+            ?.InternalName;
+        return weathermanInternalName != null;
+    }
 
     private void RefreshWeathermanStatus()
     {
@@ -369,16 +401,19 @@ public sealed class Plugin : IDalamudPlugin
             return;
         }
 
+        // Guaranteed non-null: IsWeathermanLoaded() just returned true.
+        var prefix = weathermanInternalName!;
+
         try
         {
-            var isWeatherCustom = PluginInterface.GetIpcSubscriber<bool>("Weatherman.IsWeatherCustom");
+            var isWeatherCustom = PluginInterface.GetIpcSubscriber<bool>($"{prefix}.IsWeatherCustom");
             WeathermanWeatherOverrideActive = isWeatherCustom.InvokeFunc();
         }
         catch (Exception ex)
         {
             // Installed and loaded, but the call still failed -- unlike "not
             // installed" this is actually unexpected, worth a log line.
-            Log.Debug(ex, "Presetway: Weatherman is loaded but IsWeatherCustom IPC call failed.");
+            Log.Debug(ex, $"Presetway: {prefix} is loaded but IsWeatherCustom IPC call failed.");
             WeathermanWeatherOverrideActive = null;
         }
 
@@ -386,24 +421,24 @@ public sealed class Plugin : IDalamudPlugin
         {
             try
             {
-                var getWeather = PluginInterface.GetIpcSubscriber<byte>("Weatherman.GetDisplayedWeather");
+                var getWeather = PluginInterface.GetIpcSubscriber<byte>($"{prefix}.GetDisplayedWeather");
                 WeathermanDisplayedWeatherId = getWeather.InvokeFunc();
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "Presetway: Weatherman reports a weather override is active, but GetDisplayedWeather failed -- " +
-                    "falling back to real weather for now. If your fork uses a different method name/signature, this needs to match it exactly.");
+                Log.Warning(ex, $"Presetway: {prefix} reports a weather override is active, but GetDisplayedWeather failed -- " +
+                    "falling back to real weather for now.");
             }
         }
 
         try
         {
-            var isTimeCustom = PluginInterface.GetIpcSubscriber<bool>("Weatherman.IsTimeCustom");
+            var isTimeCustom = PluginInterface.GetIpcSubscriber<bool>($"{prefix}.IsTimeCustom");
             WeathermanTimeOverrideActive = isTimeCustom.InvokeFunc();
         }
         catch (Exception ex)
         {
-            Log.Debug(ex, "Presetway: Weatherman is loaded but IsTimeCustom IPC call failed.");
+            Log.Debug(ex, $"Presetway: {prefix} is loaded but IsTimeCustom IPC call failed.");
             WeathermanTimeOverrideActive = null;
         }
 
@@ -411,15 +446,15 @@ public sealed class Plugin : IDalamudPlugin
         {
             try
             {
-                var getTime = PluginInterface.GetIpcSubscriber<uint>("Weatherman.GetDisplayedTime");
+                var getTime = PluginInterface.GetIpcSubscriber<uint>($"{prefix}.GetDisplayedTime");
                 var eorzeaSeconds = getTime.InvokeFunc();
                 var eorzeaHour = (eorzeaSeconds / 3600.0) % 24.0;
                 WeathermanDisplayedTimeOfDay = Configuration.ResolveTimeOfDay(eorzeaHour);
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "Presetway: Weatherman reports a time override is active, but GetDisplayedTime failed -- " +
-                    "falling back to real time for now. If your fork uses a different method name/signature, this needs to match it exactly.");
+                Log.Warning(ex, $"Presetway: {prefix} reports a time override is active, but GetDisplayedTime failed -- " +
+                    "falling back to real time for now.");
             }
         }
     }
