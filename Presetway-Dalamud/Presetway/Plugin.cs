@@ -339,6 +339,33 @@ public sealed class Plugin : IDalamudPlugin
     internal TimeOfDay? WeathermanDisplayedTimeOfDay { get; private set; }
 
     /// <summary>
+    /// Accepted Dalamud internal names for a Weatherman-compatible plugin, in
+    /// priority order. "Weatherman" is the official upstream plugin -- once
+    /// NightmareXIV publishes a release build that actually includes
+    /// GetDisplayedWeather/GetDisplayedTime (merged to main, not yet shipped
+    /// as of this writing), this is the only one that matters and the fork
+    /// dependency goes away entirely. "Weatherman-Temp" is the stopgap fork,
+    /// deliberately published under a different InternalName because Dalamud
+    /// won't list a third-party repo's plugin under a name that collides with
+    /// one already known from the official repo.
+    ///
+    /// ECommons' EzIPC derives its channel prefix from the loaded plugin's own
+    /// InternalName when none is explicitly specified (confirmed directly in
+    /// EzIPC.cs: `prefix ??= Svc.PluginInterface.InternalName`), and neither
+    /// Weatherman's IPCProvider nor the fork's ever specifies one. So the
+    /// fork's real IPC channels are "Weatherman-Temp.IsWeatherCustom" etc, not
+    /// "Weatherman.IsWeatherCustom" -- the prefix has to be resolved from
+    /// whichever one is actually loaded, not assumed.
+    /// </summary>
+    private static readonly string[] WeathermanInternalNames = ["Weatherman", "Weatherman-Temp"];
+
+    /// <summary>
+    /// The InternalName that was actually found loaded, used as the IPC
+    /// channel prefix. Null when neither variant is loaded.
+    /// </summary>
+    private string? weathermanInternalName;
+
+    /// <summary>
     /// Explicit existence check via InstalledPlugins, rather than relying purely
     /// on try/catch around the IPC calls -- avoids throwing (and paying .NET's
     /// real exception-handling cost) on every single state change for everyone
@@ -346,8 +373,13 @@ public sealed class Plugin : IDalamudPlugin
     /// there" a direct, visible check rather than an implicit side effect of
     /// error handling.
     /// </summary>
-    private bool IsWeathermanLoaded() =>
-        PluginInterface.InstalledPlugins.Any(p => p.InternalName == "Weatherman" && p.IsLoaded);
+    private bool IsWeathermanLoaded()
+    {
+        weathermanInternalName = PluginInterface.InstalledPlugins
+            .FirstOrDefault(p => WeathermanInternalNames.Contains(p.InternalName) && p.IsLoaded)
+            ?.InternalName;
+        return weathermanInternalName != null;
+    }
 
     private void RefreshWeathermanStatus()
     {
@@ -369,16 +401,19 @@ public sealed class Plugin : IDalamudPlugin
             return;
         }
 
+        // Guaranteed non-null: IsWeathermanLoaded() just returned true.
+        var prefix = weathermanInternalName!;
+
         try
         {
-            var isWeatherCustom = PluginInterface.GetIpcSubscriber<bool>("Weatherman.IsWeatherCustom");
+            var isWeatherCustom = PluginInterface.GetIpcSubscriber<bool>($"{prefix}.IsWeatherCustom");
             WeathermanWeatherOverrideActive = isWeatherCustom.InvokeFunc();
         }
         catch (Exception ex)
         {
             // Installed and loaded, but the call still failed -- unlike "not
             // installed" this is actually unexpected, worth a log line.
-            Log.Debug(ex, "Presetway: Weatherman is loaded but IsWeatherCustom IPC call failed.");
+            Log.Debug(ex, $"Presetway: {prefix} is loaded but IsWeatherCustom IPC call failed.");
             WeathermanWeatherOverrideActive = null;
         }
 
@@ -386,24 +421,24 @@ public sealed class Plugin : IDalamudPlugin
         {
             try
             {
-                var getWeather = PluginInterface.GetIpcSubscriber<byte>("Weatherman.GetDisplayedWeather");
+                var getWeather = PluginInterface.GetIpcSubscriber<byte>($"{prefix}.GetDisplayedWeather");
                 WeathermanDisplayedWeatherId = getWeather.InvokeFunc();
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "Presetway: Weatherman reports a weather override is active, but GetDisplayedWeather failed -- " +
-                    "falling back to real weather for now. If your fork uses a different method name/signature, this needs to match it exactly.");
+                Log.Warning(ex, $"Presetway: {prefix} reports a weather override is active, but GetDisplayedWeather failed -- " +
+                    "falling back to real weather for now.");
             }
         }
 
         try
         {
-            var isTimeCustom = PluginInterface.GetIpcSubscriber<bool>("Weatherman.IsTimeCustom");
+            var isTimeCustom = PluginInterface.GetIpcSubscriber<bool>($"{prefix}.IsTimeCustom");
             WeathermanTimeOverrideActive = isTimeCustom.InvokeFunc();
         }
         catch (Exception ex)
         {
-            Log.Debug(ex, "Presetway: Weatherman is loaded but IsTimeCustom IPC call failed.");
+            Log.Debug(ex, $"Presetway: {prefix} is loaded but IsTimeCustom IPC call failed.");
             WeathermanTimeOverrideActive = null;
         }
 
@@ -411,15 +446,15 @@ public sealed class Plugin : IDalamudPlugin
         {
             try
             {
-                var getTime = PluginInterface.GetIpcSubscriber<uint>("Weatherman.GetDisplayedTime");
+                var getTime = PluginInterface.GetIpcSubscriber<uint>($"{prefix}.GetDisplayedTime");
                 var eorzeaSeconds = getTime.InvokeFunc();
                 var eorzeaHour = (eorzeaSeconds / 3600.0) % 24.0;
                 WeathermanDisplayedTimeOfDay = Configuration.ResolveTimeOfDay(eorzeaHour);
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "Presetway: Weatherman reports a time override is active, but GetDisplayedTime failed -- " +
-                    "falling back to real time for now. If your fork uses a different method name/signature, this needs to match it exactly.");
+                Log.Warning(ex, $"Presetway: {prefix} reports a time override is active, but GetDisplayedTime failed -- " +
+                    "falling back to real time for now.");
             }
         }
     }
@@ -447,20 +482,12 @@ public sealed class Plugin : IDalamudPlugin
         var (territoryId, weatherId, timeOfDay) = GetEffectiveState();
         var rule = RuleEngine.Resolve(territoryId, weatherId, timeOfDay);
 
-        // Falls back to the configured default when nothing matches at all --
-        // without this, ReShade just stays on whatever was last active in
-        // unconfigured zones, which is the behavior anyone who hasn't set a
-        // default keeps getting (DefaultPresetPath is empty by default).
-        var resolvedPresetPath = rule?.PresetPath;
-        if (string.IsNullOrEmpty(resolvedPresetPath) && !string.IsNullOrWhiteSpace(Configuration.DefaultPresetPath))
-            resolvedPresetPath = Configuration.DefaultPresetPath;
-
         var payload = new
         {
             territoryId,
             weatherId,
             timeOfDay = timeOfDay.ToString(),
-            presetPath = resolvedPresetPath,
+            presetPath = rule?.PresetPath,
             label = rule?.Label,
             timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
         };
@@ -471,10 +498,8 @@ public sealed class Plugin : IDalamudPlugin
                 Log.Warning("Presetway: PublishData returned false.");
         }
 
-        if (rule is null && string.IsNullOrEmpty(resolvedPresetPath))
-            Log.Debug($"Presetway: no matching rule (and no default set) for territory={territoryId}, weather={weatherId}, timeOfDay={timeOfDay}.");
-        else if (rule is null)
-            Log.Information($"Presetway: no matching rule for territory={territoryId} weather={weatherId} timeOfDay={timeOfDay} -> using default preset '{resolvedPresetPath}'");
+        if (rule is null)
+            Log.Debug($"Presetway: no matching rule for territory={territoryId}, weather={weatherId}, timeOfDay={timeOfDay}.");
         else
             Log.Information($"Presetway: territory={territoryId} weather={weatherId} timeOfDay={timeOfDay} -> preset '{rule.PresetPath}' ({rule.Label})");
     }
@@ -503,16 +528,11 @@ public sealed class Plugin : IDalamudPlugin
         {
             var (territoryId, weatherId, timeOfDay) = GetEffectiveState();
             var rule = RuleEngine.Resolve(territoryId, weatherId, timeOfDay);
-            var resolvedPresetPath = rule?.PresetPath;
-            var usingDefault = string.IsNullOrEmpty(resolvedPresetPath) && !string.IsNullOrWhiteSpace(Configuration.DefaultPresetPath);
-            if (usingDefault)
-                resolvedPresetPath = Configuration.DefaultPresetPath;
-
             var bridgeState = sharingwayProvider is { IsOnline: true } ? "connected" : "not connected";
             ChatGui.Print(
                 $"[Presetway] zone={GetZoneName(Watcher.CurrentTerritoryId)} ({Watcher.CurrentTerritoryId}) " +
                 $"weather={GetWeatherName(weatherId)} ({weatherId}) " +
-                $"time={timeOfDay} -> {(resolvedPresetPath ?? "(no matching rule, no default set)")}{(usingDefault ? " (default)" : string.Empty)} " +
+                $"time={timeOfDay} -> {(rule?.PresetPath ?? "(no matching rule)")} " +
                 $"| bridge: {bridgeState} | {RulesEditable.Count} rule(s) loaded");
 
             if (WeathermanWeatherOverrideActive == true)
