@@ -103,3 +103,5 @@ Probably as complete as it's going to get.
 Likely to become abandoned or unmaintained.
 
 Currently not crashing with preset swaps - large or otherwise. Time will tell, I suppose.
+
+I wasn't familiar with the naming scheme, although I didn't come up with the working name either. Pretend it has the 'ing' until whatever happens happens or doesn't.
