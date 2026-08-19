@@ -31,6 +31,14 @@ public class Configuration : IPluginConfiguration
     public string PresetsFolder { get; set; } = string.Empty;
 
     /// <summary>
+    /// Applied when no rule matches at all -- without this, Presetway simply
+    /// doesn't publish anything for unmatched zones, so ReShade just stays on
+    /// whatever preset was last active. Empty means "no fallback" (current
+    /// behavior preserved for anyone who doesn't set one).
+    /// </summary>
+    public string DefaultPresetPath { get; set; } = string.Empty;
+
+    /// <summary>
     /// Off by default and fully manual: when false, Presetway never touches
     /// Weatherman at all -- no InstalledPlugins scan, no IPC call, nothing.
     /// When true, it checks Weatherman's IsWeatherCustom()/IsTimeCustom() and

@@ -10,12 +10,13 @@ public class ConfigWindow : Window, IDisposable
     private readonly Plugin plugin;
     private string reshadeIniPathInput = string.Empty;
     private string presetsFolderInput = string.Empty;
+    private string defaultPresetPathInput = string.Empty;
     private bool initialized;
 
     public ConfigWindow(Plugin plugin) : base("Presetway Settings###PresetwaySettings")
     {
         this.plugin = plugin;
-        Size = new Vector2(480, 340);
+        Size = new Vector2(480, 400);
         SizeCondition = ImGuiCond.FirstUseEver;
     }
 
@@ -29,6 +30,7 @@ public class ConfigWindow : Window, IDisposable
         {
             reshadeIniPathInput = config.ReShadeIniPath;
             presetsFolderInput = config.PresetsFolder;
+            defaultPresetPathInput = config.DefaultPresetPath;
             initialized = true;
         }
 
@@ -84,6 +86,17 @@ public class ConfigWindow : Window, IDisposable
             "Off by default: Presetway won't touch Weatherman at all unless this is checked. " +
             "When on, and Weatherman has an active override, you'll see a warning that the real " +
             "zone/weather/time above may not match what you're actually seeing in-game.");
+
+        ImGui.Separator();
+        ImGui.TextUnformatted("Default preset (optional -- used when no rule matches at all):");
+        ImGui.TextWrapped(
+            "Without this, entering an unconfigured zone just leaves ReShade on whatever preset " +
+            "was already active, rather than switching to anything.");
+        if (ImGui.InputText("##DefaultPresetPath", ref defaultPresetPathInput, 512))
+        {
+            config.DefaultPresetPath = Plugin.CleanPathInput(defaultPresetPathInput);
+            config.Save();
+        }
 
         ImGui.Separator();
         ImGui.TextUnformatted($"Rules file: {plugin.Configuration.RulesFilePath}");

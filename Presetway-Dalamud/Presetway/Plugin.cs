@@ -447,12 +447,20 @@ public sealed class Plugin : IDalamudPlugin
         var (territoryId, weatherId, timeOfDay) = GetEffectiveState();
         var rule = RuleEngine.Resolve(territoryId, weatherId, timeOfDay);
 
+        // Falls back to the configured default when nothing matches at all --
+        // without this, ReShade just stays on whatever was last active in
+        // unconfigured zones, which is the behavior anyone who hasn't set a
+        // default keeps getting (DefaultPresetPath is empty by default).
+        var resolvedPresetPath = rule?.PresetPath;
+        if (string.IsNullOrEmpty(resolvedPresetPath) && !string.IsNullOrWhiteSpace(Configuration.DefaultPresetPath))
+            resolvedPresetPath = Configuration.DefaultPresetPath;
+
         var payload = new
         {
             territoryId,
             weatherId,
             timeOfDay = timeOfDay.ToString(),
-            presetPath = rule?.PresetPath,
+            presetPath = resolvedPresetPath,
             label = rule?.Label,
             timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
         };
@@ -463,8 +471,10 @@ public sealed class Plugin : IDalamudPlugin
                 Log.Warning("Presetway: PublishData returned false.");
         }
 
-        if (rule is null)
-            Log.Debug($"Presetway: no matching rule for territory={territoryId}, weather={weatherId}, timeOfDay={timeOfDay}.");
+        if (rule is null && string.IsNullOrEmpty(resolvedPresetPath))
+            Log.Debug($"Presetway: no matching rule (and no default set) for territory={territoryId}, weather={weatherId}, timeOfDay={timeOfDay}.");
+        else if (rule is null)
+            Log.Information($"Presetway: no matching rule for territory={territoryId} weather={weatherId} timeOfDay={timeOfDay} -> using default preset '{resolvedPresetPath}'");
         else
             Log.Information($"Presetway: territory={territoryId} weather={weatherId} timeOfDay={timeOfDay} -> preset '{rule.PresetPath}' ({rule.Label})");
     }
@@ -493,11 +503,16 @@ public sealed class Plugin : IDalamudPlugin
         {
             var (territoryId, weatherId, timeOfDay) = GetEffectiveState();
             var rule = RuleEngine.Resolve(territoryId, weatherId, timeOfDay);
+            var resolvedPresetPath = rule?.PresetPath;
+            var usingDefault = string.IsNullOrEmpty(resolvedPresetPath) && !string.IsNullOrWhiteSpace(Configuration.DefaultPresetPath);
+            if (usingDefault)
+                resolvedPresetPath = Configuration.DefaultPresetPath;
+
             var bridgeState = sharingwayProvider is { IsOnline: true } ? "connected" : "not connected";
             ChatGui.Print(
                 $"[Presetway] zone={GetZoneName(Watcher.CurrentTerritoryId)} ({Watcher.CurrentTerritoryId}) " +
                 $"weather={GetWeatherName(weatherId)} ({weatherId}) " +
-                $"time={timeOfDay} -> {(rule?.PresetPath ?? "(no matching rule)")} " +
+                $"time={timeOfDay} -> {(resolvedPresetPath ?? "(no matching rule, no default set)")}{(usingDefault ? " (default)" : string.Empty)} " +
                 $"| bridge: {bridgeState} | {RulesEditable.Count} rule(s) loaded");
 
             if (WeathermanWeatherOverrideActive == true)
