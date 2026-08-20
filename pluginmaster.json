@@ -3,14 +3,14 @@
     "Author": "Bastaklis",
     "Name": "Presettingway",
     "InternalName": "Presettingway",
-    "AssemblyVersion": "0.1.0.1",
+    "AssemblyVersion": "0.1.1.1",
     "Description": "Reads the current zone, weather, and time of day and publishes them over a Sharingway IPC channel so a companion ReShade addon can switch presets automatically. Use /presettingway to open the window, /presettingway status for a text summary, /presettingway config for settings.",
     "Punchline": "Automatically switches ReShade presets based on zone, weather, and time of day.",
     "ApplicableVersion": "any",
     "Tags": ["reshade", "weather", "zone", "automation"],
     "RepoUrl": "https://github.com/Bastaklis1/Presettingway",
-    "DownloadLinkInstall": "https://github.com/Bastaklis1/Presettingway/releases/download/v0.1.0.1/Presettingway.zip",
-    "DownloadLinkUpdate": "https://github.com/Bastaklis1/Presettingway/releases/download/v0.1.0.1/Presettingway.zip",
-    "DownloadLinkTesting": "https://github.com/Bastaklis1/Presettingway/releases/download/v0.1.0.1/Presettingway.zip"
+    "DownloadLinkInstall": "https://github.com/Bastaklis1/Presettingway/releases/download/v0.1.1.1/Presettingway.zip",
+    "DownloadLinkUpdate": "https://github.com/Bastaklis1/Presettingway/releases/download/v0.1.1.1/Presettingway.zip",
+    "DownloadLinkTesting": "https://github.com/Bastaklis1/Presettingway/releases/download/v0.1.1.1/Presettingway.zip"
   }
 ]
