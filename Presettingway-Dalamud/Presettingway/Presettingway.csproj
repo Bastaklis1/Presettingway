@@ -6,7 +6,7 @@
     goatcorp/SamplePlugin currently pins if this fails to restore.
   -->
   <PropertyGroup>
-    <Version>0.1.0.1</Version>
+    <Version>0.1.1.1</Version>
     <Description>Reads FFXIV zone + weather state and publishes it over Sharingway so a companion ReShade addon can switch presets automatically.</Description>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
