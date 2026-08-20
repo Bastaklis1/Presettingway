@@ -95,13 +95,11 @@ separate downloads:
 
 ## Status
 
-(Maybe) Working prototype, tested by hand across multiple sessions, not yet reviewed
+(Currently) Working prototype, tested by hand across multiple sessions, not yet reviewed
 or tested by anyone besides the author. 
 
 Probably as complete as it's going to get. 
 
 Likely to become abandoned or unmaintained.
 
-Currently not crashing with preset swaps - large or otherwise. Time will tell, I suppose.
-
-I wasn't familiar with the naming scheme, although I didn't come up with the working name either. Pretend it has the 'ing' until whatever happens happens or doesn't.
+Currently not crashing with preset swaps - large or otherwise. Time and testing will tell, I suppose.
