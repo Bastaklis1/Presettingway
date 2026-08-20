@@ -1,0 +1,13 @@
+{
+  "Author": "Bastaklis",
+  "Name": "Presettingway",
+  "Punchline": "Automatically switches ReShade presets based on zone and weather.",
+  "Description": "Reads the current zone and weather and publishes them over a Sharingway IPC channel so a companion ReShade addon can switch presets automatically. Use /presettingway to check status, /presettingway reload to re-read the rules file.",
+  "ApplicableVersion": "any",
+  "Tags": [
+    "reshade",
+    "weather",
+    "zone",
+    "automation"
+  ]
+}

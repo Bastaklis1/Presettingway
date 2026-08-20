@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+  <!--
+    If your local Dalamud install reports a different Dalamud.NET.Sdk version when you
+    open this in Visual Studio, bump the version above to match. Check whatever
+    goatcorp/SamplePlugin currently pins if this fails to restore.
+  -->
+  <PropertyGroup>
+    <Version>0.1.0.1</Version>
+    <Description>Reads FFXIV zone + weather state and publishes it over Sharingway so a companion ReShade addon can switch presets automatically.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    No explicit System.Text.Json PackageReference: on the net10.0-windows target
+    this SDK uses, it's already part of the shared framework, and an explicit
+    reference just produces a build warning telling you to remove it.
+  -->
+
+  <ItemGroup>
+    <None Include="..\presettingway-rules.example.json" CopyToOutputDirectory="PreserveNewest" Visible="true" />
+  </ItemGroup>
+</Project>
