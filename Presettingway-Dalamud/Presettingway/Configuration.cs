@@ -1,7 +1,7 @@
 using System;
 using Dalamud.Configuration;
 
-namespace Presetway;
+namespace Presettingway;
 
 [Serializable]
 public class Configuration : IPluginConfiguration
@@ -10,11 +10,11 @@ public class Configuration : IPluginConfiguration
 
     /// <summary>
     /// Path to the JSON rules file. Relative paths are resolved against this
-    /// plugin's own config directory (…/pluginConfigs/Presetway/) so the
+    /// plugin's own config directory (…/pluginConfigs/Presettingway/) so the
     /// example file that ships next to the DLL is picked up automatically
     /// the first time you copy it there.
     /// </summary>
-    public string RulesFilePath { get; set; } = "presetway-rules.json";
+    public string RulesFilePath { get; set; } = "presettingway-rules.json";
 
     /// <summary>
     /// Full path to ReShade's own .ini (the one next to ffxiv_dx11.exe, not a
@@ -31,7 +31,7 @@ public class Configuration : IPluginConfiguration
     public string PresetsFolder { get; set; } = string.Empty;
 
     /// <summary>
-    /// Applied when no rule matches at all -- without this, Presetway simply
+    /// Applied when no rule matches at all -- without this, Presettingway simply
     /// doesn't publish anything for unmatched zones, so ReShade just stays on
     /// whatever preset was last active. Empty means "no fallback" (current
     /// behavior preserved for anyone who doesn't set one).
@@ -39,7 +39,7 @@ public class Configuration : IPluginConfiguration
     public string DefaultPresetPath { get; set; } = string.Empty;
 
     /// <summary>
-    /// Off by default and fully manual: when false, Presetway never touches
+    /// Off by default and fully manual: when false, Presettingway never touches
     /// Weatherman at all -- no InstalledPlugins scan, no IPC call, nothing.
     /// When true, it checks Weatherman's IsWeatherCustom()/IsTimeCustom() and
     /// shows a warning banner when either is active (see Plugin.RefreshWeathermanStatus).

@@ -9,15 +9,15 @@ using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
-using Presetway.Windows;
+using Presettingway.Windows;
 using Sharingway.Net;
 
-namespace Presetway;
+namespace Presettingway;
 
 public sealed class Plugin : IDalamudPlugin
 {
-    private const string CommandName = "/presetway";
-    private const string SharingwayProviderName = "Presetway";
+    private const string CommandName = "/presettingway";
+    private const string SharingwayProviderName = "Presettingway";
 
     // TimeOfDay needs the string converter, or a rules file with "timeOfDay": "Night"
     // fails to parse -- System.Text.Json defaults to numeric enum values otherwise.
@@ -48,7 +48,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>(id, display name) pairs for every weather type, sorted alphabetically.</summary>
     internal List<(byte Id, string Name)> WeatherList { get; } = new();
 
-    private readonly WindowSystem windowSystem = new("Presetway");
+    private readonly WindowSystem windowSystem = new("Presettingway");
     private readonly MainWindow mainWindow;
     private readonly ConfigWindow configWindow;
 
@@ -81,10 +81,10 @@ public sealed class Plugin : IDalamudPlugin
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Presetway: no args = open window, 'status' = text status, 'reload' = re-read rules file, 'config' = open settings.",
+            HelpMessage = "Presettingway: no args = open window, 'status' = text status, 'reload' = re-read rules file, 'config' = open settings.",
         });
 
-        Log.Information("Presetway loaded.");
+        Log.Information("Presettingway loaded.");
     }
 
     private void PopulateGameData()
@@ -108,7 +108,7 @@ public sealed class Plugin : IDalamudPlugin
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Presetway: couldn't read the TerritoryType sheet; zone dropdown will be empty (use manual ID entry).");
+            Log.Warning(ex, "Presettingway: couldn't read the TerritoryType sheet; zone dropdown will be empty (use manual ID entry).");
         }
 
         try
@@ -127,7 +127,7 @@ public sealed class Plugin : IDalamudPlugin
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Presetway: couldn't read the Weather sheet; weather dropdown will be empty (use manual ID entry).");
+            Log.Warning(ex, "Presettingway: couldn't read the Weather sheet; weather dropdown will be empty (use manual ID entry).");
         }
     }
 
@@ -171,12 +171,12 @@ public sealed class Plugin : IDalamudPlugin
             {
                 Configuration.ReShadeIniPath = candidate;
                 Configuration.Save();
-                Log.Information($"Presetway: auto-detected ReShade.ini at '{candidate}'.");
+                Log.Information($"Presettingway: auto-detected ReShade.ini at '{candidate}'.");
             }
         }
         catch (Exception ex)
         {
-            Log.Debug(ex, "Presetway: ReShade.ini auto-detection failed (non-fatal, settings can still be set by hand).");
+            Log.Debug(ex, "Presettingway: ReShade.ini auto-detection failed (non-fatal, settings can still be set by hand).");
         }
     }
 
@@ -192,7 +192,7 @@ public sealed class Plugin : IDalamudPlugin
         var iniPath = CleanPathInput(Configuration.ReShadeIniPath ?? string.Empty);
         if (string.IsNullOrWhiteSpace(iniPath) || !File.Exists(iniPath))
         {
-            Log.Warning($"Presetway: ReShade.ini not found at '{iniPath}'. Set the correct path in Presetway settings (/presetway config).");
+            Log.Warning($"Presettingway: ReShade.ini not found at '{iniPath}'. Set the correct path in Presettingway settings (/presettingway config).");
             return null;
         }
 
@@ -220,10 +220,10 @@ public sealed class Plugin : IDalamudPlugin
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Presetway: failed to read ReShade.ini.");
+            Log.Warning(ex, "Presettingway: failed to read ReShade.ini.");
         }
 
-        Log.Warning("Presetway: no PresetPath= line found in ReShade.ini.");
+        Log.Warning("Presettingway: no PresetPath= line found in ReShade.ini.");
         return null;
     }
 
@@ -238,13 +238,13 @@ public sealed class Plugin : IDalamudPlugin
 
             if (!sharingwayProvider.Initialize())
             {
-                Log.Warning("Presetway: Sharingway provider failed to initialize. State will still be logged, but nothing will reach the ReShade addon.");
+                Log.Warning("Presettingway: Sharingway provider failed to initialize. State will still be logged, but nothing will reach the ReShade addon.");
                 sharingwayProvider = null;
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Presetway: failed to set up the Sharingway provider.");
+            Log.Error(ex, "Presettingway: failed to set up the Sharingway provider.");
             sharingwayProvider = null;
         }
     }
@@ -256,7 +256,7 @@ public sealed class Plugin : IDalamudPlugin
             var path = ResolveRulesPath();
             if (!File.Exists(path))
             {
-                Log.Warning($"Presetway: no rules file at '{path}'. Add rules via the Presetway window, or copy presetway-rules.example.json there (renamed).");
+                Log.Warning($"Presettingway: no rules file at '{path}'. Add rules via the Presettingway window, or copy presettingway-rules.example.json there (renamed).");
                 RulesEditable = new List<PresetRule>();
                 RuleEngine.SetRules(RulesEditable);
                 return true;
@@ -267,7 +267,7 @@ public sealed class Plugin : IDalamudPlugin
 
             RulesEditable = rules;
             RuleEngine.SetRules(RulesEditable);
-            Log.Information($"Presetway: loaded {rules.Count} rule(s) from '{path}'.");
+            Log.Information($"Presettingway: loaded {rules.Count} rule(s) from '{path}'.");
             return true;
         }
         catch (Exception ex)
@@ -276,8 +276,8 @@ public sealed class Plugin : IDalamudPlugin
             // rules file could be empty/malformed (e.g. after hand-editing) and
             // "Reload from disk" would appear to just do nothing, since the old
             // in-memory rules were left untouched rather than cleared. Surface it.
-            Log.Error(ex, "Presetway: failed to load the rules file.");
-            ChatGui.Print($"[Presetway] Reload failed: {ex.Message}. Rules file may be malformed -- previous rules were kept as-is.");
+            Log.Error(ex, "Presettingway: failed to load the rules file.");
+            ChatGui.Print($"[Presettingway] Reload failed: {ex.Message}. Rules file may be malformed -- previous rules were kept as-is.");
             return false;
         }
     }
@@ -293,12 +293,12 @@ public sealed class Plugin : IDalamudPlugin
             var json = JsonSerializer.Serialize(RulesEditable, JsonOptions);
             File.WriteAllText(path, json);
             RuleEngine.SetRules(RulesEditable);
-            Log.Information($"Presetway: saved {RulesEditable.Count} rule(s) to '{path}'.");
+            Log.Information($"Presettingway: saved {RulesEditable.Count} rule(s) to '{path}'.");
             PublishEffectiveState();
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Presetway: failed to save the rules file.");
+            Log.Error(ex, "Presettingway: failed to save the rules file.");
         }
     }
 
@@ -413,7 +413,7 @@ public sealed class Plugin : IDalamudPlugin
         {
             // Installed and loaded, but the call still failed -- unlike "not
             // installed" this is actually unexpected, worth a log line.
-            Log.Debug(ex, $"Presetway: {prefix} is loaded but IsWeatherCustom IPC call failed.");
+            Log.Debug(ex, $"Presettingway: {prefix} is loaded but IsWeatherCustom IPC call failed.");
             WeathermanWeatherOverrideActive = null;
         }
 
@@ -426,7 +426,7 @@ public sealed class Plugin : IDalamudPlugin
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, $"Presetway: {prefix} reports a weather override is active, but GetDisplayedWeather failed -- " +
+                Log.Warning(ex, $"Presettingway: {prefix} reports a weather override is active, but GetDisplayedWeather failed -- " +
                     "falling back to real weather for now.");
             }
         }
@@ -438,7 +438,7 @@ public sealed class Plugin : IDalamudPlugin
         }
         catch (Exception ex)
         {
-            Log.Debug(ex, $"Presetway: {prefix} is loaded but IsTimeCustom IPC call failed.");
+            Log.Debug(ex, $"Presettingway: {prefix} is loaded but IsTimeCustom IPC call failed.");
             WeathermanTimeOverrideActive = null;
         }
 
@@ -453,7 +453,7 @@ public sealed class Plugin : IDalamudPlugin
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, $"Presetway: {prefix} reports a time override is active, but GetDisplayedTime failed -- " +
+                Log.Warning(ex, $"Presettingway: {prefix} reports a time override is active, but GetDisplayedTime failed -- " +
                     "falling back to real time for now.");
             }
         }
@@ -495,13 +495,13 @@ public sealed class Plugin : IDalamudPlugin
         if (sharingwayProvider is { IsOnline: true })
         {
             if (!sharingwayProvider.PublishData(payload))
-                Log.Warning("Presetway: PublishData returned false.");
+                Log.Warning("Presettingway: PublishData returned false.");
         }
 
         if (rule is null)
-            Log.Debug($"Presetway: no matching rule for territory={territoryId}, weather={weatherId}, timeOfDay={timeOfDay}.");
+            Log.Debug($"Presettingway: no matching rule for territory={territoryId}, weather={weatherId}, timeOfDay={timeOfDay}.");
         else
-            Log.Information($"Presetway: territory={territoryId} weather={weatherId} timeOfDay={timeOfDay} -> preset '{rule.PresetPath}' ({rule.Label})");
+            Log.Information($"Presettingway: territory={territoryId} weather={weatherId} timeOfDay={timeOfDay} -> preset '{rule.PresetPath}' ({rule.Label})");
     }
 
     private void OnCommand(string command, string args)
@@ -513,7 +513,7 @@ public sealed class Plugin : IDalamudPlugin
             if (LoadRules())
             {
                 PublishEffectiveState();
-                ChatGui.Print($"[Presetway] Rules reloaded — {RulesEditable.Count} rule(s) now loaded.");
+                ChatGui.Print($"[Presettingway] Rules reloaded — {RulesEditable.Count} rule(s) now loaded.");
             }
             return;
         }
@@ -530,7 +530,7 @@ public sealed class Plugin : IDalamudPlugin
             var rule = RuleEngine.Resolve(territoryId, weatherId, timeOfDay);
             var bridgeState = sharingwayProvider is { IsOnline: true } ? "connected" : "not connected";
             ChatGui.Print(
-                $"[Presetway] zone={GetZoneName(Watcher.CurrentTerritoryId)} ({Watcher.CurrentTerritoryId}) " +
+                $"[Presettingway] zone={GetZoneName(Watcher.CurrentTerritoryId)} ({Watcher.CurrentTerritoryId}) " +
                 $"weather={GetWeatherName(weatherId)} ({weatherId}) " +
                 $"time={timeOfDay} -> {(rule?.PresetPath ?? "(no matching rule)")} " +
                 $"| bridge: {bridgeState} | {RulesEditable.Count} rule(s) loaded");
@@ -538,15 +538,15 @@ public sealed class Plugin : IDalamudPlugin
             if (WeathermanWeatherOverrideActive == true)
             {
                 ChatGui.Print(WeathermanDisplayedWeatherId.HasValue
-                    ? $"[Presetway] Weatherman weather override active -> {GetWeatherName(WeathermanDisplayedWeatherId.Value)} (used above)"
-                    : "[Presetway] Weatherman weather override active, but its value couldn't be read -- falling back to real weather. Check /xllog.");
+                    ? $"[Presettingway] Weatherman weather override active -> {GetWeatherName(WeathermanDisplayedWeatherId.Value)} (used above)"
+                    : "[Presettingway] Weatherman weather override active, but its value couldn't be read -- falling back to real weather. Check /xllog.");
             }
 
             if (WeathermanTimeOverrideActive == true)
             {
                 ChatGui.Print(WeathermanDisplayedTimeOfDay.HasValue
-                    ? $"[Presetway] Weatherman time override active -> {WeathermanDisplayedTimeOfDay.Value} (used above)"
-                    : "[Presetway] Weatherman time override active, but its value couldn't be read -- falling back to real time. Check /xllog.");
+                    ? $"[Presettingway] Weatherman time override active -> {WeathermanDisplayedTimeOfDay.Value} (used above)"
+                    : "[Presettingway] Weatherman time override active, but its value couldn't be read -- falling back to real time. Check /xllog.");
             }
             return;
         }

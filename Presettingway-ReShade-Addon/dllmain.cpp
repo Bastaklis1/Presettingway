@@ -1,6 +1,6 @@
-// Presetway ReShade addon
+// Presettingway ReShade addon
 //
-// Subscribes to the "Presetway" Sharingway provider (published by the Presetway
+// Subscribes to the "Presettingway" Sharingway provider (published by the Presettingway
 // Dalamud plugin) and calls effect_runtime::set_current_preset_path() whenever
 // a new preset path arrives.
 //
@@ -64,7 +64,7 @@ using namespace reshade::api;
 namespace
 {
     Sharingway::Subscriber* g_subscriber = nullptr;
-    std::atomic<bool> g_subscribedToPresetway{ false };
+    std::atomic<bool> g_subscribedToPresettingway{ false };
 
     // The currently-valid effect_runtime, captured/cleared via the two
     // lifecycle events below. addon_event::present doesn't hand us one
@@ -86,12 +86,12 @@ namespace
             g_pendingPresetPath = path;
     }
 
-    // Called by Sharingway on its own background thread whenever the "Presetway"
+    // Called by Sharingway on its own background thread whenever the "Presettingway"
     // provider publishes new data. Expected JSON shape (see the Dalamud plugin):
     //   { "territoryId": ..., "weatherId": ..., "presetPath": "...", "label": "..." }
     void on_sharingway_data(const std::string& provider, const json& data)
     {
-        if (provider != "Presetway")
+        if (provider != "Presettingway")
             return;
 
         if (!data.contains("presetPath") || !data["presetPath"].is_string())
@@ -99,14 +99,14 @@ namespace
 
         const std::string presetPath = data["presetPath"].get<std::string>();
         reshade::log::message(reshade::log::level::info,
-            ("Presetway: received preset path '" + presetPath + "'").c_str());
+            ("Presettingway: received preset path '" + presetPath + "'").c_str());
 
         queue_preset_switch(presetPath);
     }
 
     void on_provider_status(const std::string& provider, Sharingway::ProviderStatus status)
     {
-        if (provider != "Presetway")
+        if (provider != "Presettingway")
             return;
 
         if (status == Sharingway::ProviderStatus::Online)
@@ -116,16 +116,16 @@ namespace
             // duplicate subscriptions is exactly the kind of thing that erodes
             // stability over a long play session even when it isn't the direct
             // cause of any one crash.
-            if (g_subscribedToPresetway.exchange(true))
+            if (g_subscribedToPresettingway.exchange(true))
                 return;
 
-            reshade::log::message(reshade::log::level::info, "Presetway: provider online, subscribing.");
+            reshade::log::message(reshade::log::level::info, "Presettingway: provider online, subscribing.");
             if (g_subscriber != nullptr)
                 g_subscriber->SubscribeTo(provider);
         }
         else
         {
-            g_subscribedToPresetway.store(false);
+            g_subscribedToPresettingway.store(false);
         }
     }
 
@@ -170,12 +170,12 @@ namespace
         if (runtime == nullptr)
         {
             reshade::log::message(reshade::log::level::warning,
-                "Presetway: preset switch requested but no effect_runtime is available yet; dropping this one.");
+                "Presettingway: preset switch requested but no effect_runtime is available yet; dropping this one.");
             return;
         }
 
         reshade::log::message(reshade::log::level::info,
-            ("Presetway: switching preset to '" + *toApply + "'").c_str());
+            ("Presettingway: switching preset to '" + *toApply + "'").c_str());
 
         runtime->set_current_preset_path(toApply->c_str());
         g_lastAppliedPresetPath = *toApply;
@@ -200,24 +200,24 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID)
             g_subscriber->SetDataUpdateHandler(&on_sharingway_data);
             g_subscriber->SetProviderChangeHandler(&on_provider_status);
 
-            // Cover both load orders: subscribe immediately to Presetway if it's
+            // Cover both load orders: subscribe immediately to Presettingway if it's
             // already online, and auto-subscribe later via the status handler
             // above if the Dalamud plugin loads (or reloads) afterwards.
             for (const auto& providerInfo : g_subscriber->GetAvailableProviders())
             {
-                if (providerInfo.name == "Presetway")
+                if (providerInfo.name == "Presettingway")
                 {
                     g_subscriber->SubscribeTo(providerInfo.name);
-                    g_subscribedToPresetway.store(true);
+                    g_subscribedToPresettingway.store(true);
                 }
             }
 
-            reshade::log::message(reshade::log::level::info, "Presetway addon: Sharingway subscriber ready.");
+            reshade::log::message(reshade::log::level::info, "Presettingway addon: Sharingway subscriber ready.");
         }
         else
         {
             reshade::log::message(reshade::log::level::warning,
-                "Presetway addon: Sharingway subscriber failed to initialize. Preset switching will not work until this is resolved.");
+                "Presettingway addon: Sharingway subscriber failed to initialize. Preset switching will not work until this is resolved.");
         }
         break;
 

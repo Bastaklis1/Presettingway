@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Presetway;
+namespace Presettingway;
 
 /// <summary>
 /// A single zone/weather/time-of-day -> ReShade preset mapping. Loaded from

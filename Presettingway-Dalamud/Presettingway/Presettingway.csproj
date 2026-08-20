@@ -18,6 +18,6 @@
   -->
 
   <ItemGroup>
-    <None Include="..\presetway-rules.example.json" CopyToOutputDirectory="PreserveNewest" Visible="true" />
+    <None Include="..\presettingway-rules.example.json" CopyToOutputDirectory="PreserveNewest" Visible="true" />
   </ItemGroup>
 </Project>

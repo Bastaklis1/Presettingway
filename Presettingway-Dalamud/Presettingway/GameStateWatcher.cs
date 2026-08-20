@@ -3,7 +3,7 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using GameFramework = FFXIVClientStructs.FFXIV.Client.System.Framework.Framework;
 
-namespace Presetway;
+namespace Presettingway;
 
 /// <summary>
 /// Watches territory (zone), weather, and time-of-day state and raises
@@ -67,7 +67,7 @@ internal sealed class GameStateWatcher : IDisposable
     {
         pendingTerritoryId = territoryId;
         territoryDebounceRemaining = TerritoryDebounceSeconds;
-        log.Debug($"[Presetway] Territory changed -> {territoryId}, debouncing {TerritoryDebounceSeconds}s before acting.");
+        log.Debug($"[Presettingway] Territory changed -> {territoryId}, debouncing {TerritoryDebounceSeconds}s before acting.");
     }
 
     private void OnFrameworkUpdate(IFramework fw)
@@ -113,7 +113,7 @@ internal sealed class GameStateWatcher : IDisposable
 
         CurrentWeatherId = weatherId;
         CurrentTimeOfDay = timeOfDay;
-        log.Information($"[Presetway] State: territory={CurrentTerritoryId}, weather={CurrentWeatherId}, timeOfDay={CurrentTimeOfDay} (eorzeaHour={eorzeaHour:F2})");
+        log.Information($"[Presettingway] State: territory={CurrentTerritoryId}, weather={CurrentWeatherId}, timeOfDay={CurrentTimeOfDay} (eorzeaHour={eorzeaHour:F2})");
         StateChanged?.Invoke(CurrentTerritoryId, CurrentWeatherId, CurrentTimeOfDay);
     }
 

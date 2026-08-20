@@ -1,28 +1,28 @@
 cmake_minimum_required(VERSION 3.20)
-project(PresetwayAddon LANGUAGES CXX)
+project(PresettingwayAddon LANGUAGES CXX)
 
-# Builds Presetway.dll — rename to Presetway.addon and drop it next to
+# Builds Presettingway.dll — rename to Presettingway.addon and drop it next to
 # ffxiv_dx11.exe (or wherever your ReShade addon search path points) to install.
 
-add_library(PresetwayAddon SHARED
+add_library(PresettingwayAddon SHARED
     dllmain.cpp
     ThirdParty/Sharingway/Sharingway.cpp
 )
 
-target_include_directories(PresetwayAddon PRIVATE
+target_include_directories(PresettingwayAddon PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/reshade-sdk
     ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/Sharingway
 )
 
-target_compile_features(PresetwayAddon PRIVATE cxx_std_17)
+target_compile_features(PresettingwayAddon PRIVATE cxx_std_17)
 
 if (MSVC)
-    target_compile_options(PresetwayAddon PRIVATE /W3 /permissive-)
+    target_compile_options(PresettingwayAddon PRIVATE /W3 /permissive-)
 endif()
 
-set_target_properties(PresetwayAddon PROPERTIES
-    OUTPUT_NAME "Presetway"
+set_target_properties(PresettingwayAddon PROPERTIES
+    OUTPUT_NAME "Presettingway"
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin
 )
 

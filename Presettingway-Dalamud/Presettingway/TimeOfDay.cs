@@ -1,4 +1,4 @@
-namespace Presetway;
+namespace Presettingway;
 
 /// <summary>
 /// Coarse Eorzea-clock bucket. Boundaries between these are configurable

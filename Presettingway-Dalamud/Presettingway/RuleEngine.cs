@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Presetway;
+namespace Presettingway;
 
 /// <summary>
 /// Holds the current rule set and resolves the best match for a given

@@ -6,7 +6,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
 
-namespace Presetway.Windows;
+namespace Presettingway.Windows;
 
 public class MainWindow : Window, IDisposable
 {
@@ -50,7 +50,7 @@ public class MainWindow : Window, IDisposable
     // is just "repopulate the add-rule form, then Add rule again."
     private bool editingExistingRule;
 
-    public MainWindow(Plugin plugin) : base("Presetway###PresetwayMain")
+    public MainWindow(Plugin plugin) : base("Presettingway###PresettingwayMain")
     {
         this.plugin = plugin;
 
@@ -162,7 +162,7 @@ public class MainWindow : Window, IDisposable
                     }
                     else
                     {
-                        Plugin.ChatGui.Print($"[Presetway] Couldn't find '{CommonWeatherNames[i]}' in the weather sheet — pick it from Advanced instead.");
+                        Plugin.ChatGui.Print($"[Presettingway] Couldn't find '{CommonWeatherNames[i]}' in the weather sheet — pick it from Advanced instead.");
                     }
                 }
             }
@@ -290,7 +290,7 @@ public class MainWindow : Window, IDisposable
         var path = plugin.TryReadCurrentReShadePresetPath();
         if (path is null)
         {
-            Plugin.ChatGui.Print("[Presetway] Couldn't read a current preset from ReShade.ini — set the correct path in Settings (/presetway config), or type the preset path in manually.");
+            Plugin.ChatGui.Print("[Presettingway] Couldn't read a current preset from ReShade.ini — set the correct path in Settings (/presettingway config), or type the preset path in manually.");
             return;
         }
 
@@ -302,7 +302,7 @@ public class MainWindow : Window, IDisposable
         var cleanedPath = Plugin.CleanPathInput(presetPathInput);
         if (string.IsNullOrWhiteSpace(cleanedPath))
         {
-            Plugin.ChatGui.Print("[Presetway] Enter a preset path before adding a rule.");
+            Plugin.ChatGui.Print("[Presettingway] Enter a preset path before adding a rule.");
             return;
         }
 

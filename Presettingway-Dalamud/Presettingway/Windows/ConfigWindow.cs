@@ -3,7 +3,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
 
-namespace Presetway.Windows;
+namespace Presettingway.Windows;
 
 public class ConfigWindow : Window, IDisposable
 {
@@ -13,7 +13,7 @@ public class ConfigWindow : Window, IDisposable
     private string defaultPresetPathInput = string.Empty;
     private bool initialized;
 
-    public ConfigWindow(Plugin plugin) : base("Presetway Settings###PresetwaySettings")
+    public ConfigWindow(Plugin plugin) : base("Presettingway Settings###PresettingwaySettings")
     {
         this.plugin = plugin;
         Size = new Vector2(480, 400);
@@ -83,7 +83,7 @@ public class ConfigWindow : Window, IDisposable
             config.Save();
         }
         ImGui.TextWrapped(
-            "Off by default: Presetway won't touch Weatherman at all unless this is checked. " +
+            "Off by default: Presettingway won't touch Weatherman at all unless this is checked. " +
             "When on, and Weatherman has an active override, you'll see a warning that the real " +
             "zone/weather/time above may not match what you're actually seeing in-game.");
 
@@ -103,7 +103,7 @@ public class ConfigWindow : Window, IDisposable
         if (ImGui.Button("Reload rules from disk"))
         {
             if (plugin.LoadRules())
-                Plugin.ChatGui.Print($"[Presetway] Reloaded — {plugin.RulesEditable.Count} rule(s) now loaded.");
+                Plugin.ChatGui.Print($"[Presettingway] Reloaded — {plugin.RulesEditable.Count} rule(s) now loaded.");
         }
     }
 
