@@ -9,8 +9,8 @@
     "ApplicableVersion": "any",
     "Tags": ["reshade", "weather", "zone", "automation"],
     "RepoUrl": "https://github.com/Bastaklis1/Presettingway",
-    "DownloadLinkInstall": "https://github.com/Bastaklis1/Presettingway/releases/download/v0.1.1.1/Presettingway.zip",
-    "DownloadLinkUpdate": "https://github.com/Bastaklis1/Presettingway/releases/download/v0.1.1.1/Presettingway.zip",
-    "DownloadLinkTesting": "https://github.com/Bastaklis1/Presettingway/releases/download/v0.1.1.1/Presettingway.zip"
+    "DownloadLinkInstall": "https://github.com/Bastaklis1/Presettingway/releases/download/v0.1.1.1/presettingway.zip",
+    "DownloadLinkUpdate": "https://github.com/Bastaklis1/Presettingway/releases/download/v0.1.1.1/presettingway.zip",
+    "DownloadLinkTesting": "https://github.com/Bastaklis1/Presettingway/releases/download/v0.1.1.1/presettingway.zip"
   }
 ]
