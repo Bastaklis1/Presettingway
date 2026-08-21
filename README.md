@@ -12,7 +12,7 @@ If you are someone who is not okay with the use of AI in coding/creating things,
 
 If you are someone who actually knows what they're doing, and ideally a trusted plugin and/or addon developer already and would like to take over this project, make changes to it, review it, etc, please [open an issue](https://github.com/Bastaklis1/Presettingway/issues) or reach out directly.
 
-Upstream licenses apply wherever their code is used (see Credits below). Anything else in this repo should be considered MIT -- see `LICENSE`. 
+Upstream licenses apply wherever their code is used (see Credits below). Anything else in this repo should be considered AGPL-3.0 -- see `LICENSE`. 
 
 ---
 
