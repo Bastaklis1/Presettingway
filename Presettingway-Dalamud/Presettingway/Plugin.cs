@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Dalamud.Game.Command;
+using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
@@ -49,6 +50,15 @@ public sealed class Plugin : IDalamudPlugin
     internal List<(byte Id, string Name)> WeatherList { get; } = new();
 
     private readonly WindowSystem windowSystem = new("Presettingway");
+
+    /// <summary>
+    /// Dalamud's own built-in ImGui file/folder picker -- drawn as a normal
+    /// ImGui window, same as everything else here, so no native interop or
+    /// P/Invoke needed at all. Its .Draw() has to run every frame regardless
+    /// of whether a dialog is currently open (it no-ops internally when not),
+    /// so it's wired into the same Draw subscription as the window system.
+    /// </summary>
+    internal readonly FileDialogManager FileDialogManager = new();
     private readonly MainWindow mainWindow;
     private readonly ConfigWindow configWindow;
 
@@ -72,6 +82,7 @@ public sealed class Plugin : IDalamudPlugin
         windowSystem.AddWindow(configWindow);
 
         PluginInterface.UiBuilder.Draw += windowSystem.Draw;
+        PluginInterface.UiBuilder.Draw += FileDialogManager.Draw;
         PluginInterface.UiBuilder.OpenMainUi += () => mainWindow.IsOpen = true;
         PluginInterface.UiBuilder.OpenConfigUi += () => configWindow.IsOpen = true;
 
@@ -558,6 +569,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         CommandManager.RemoveHandler(CommandName);
         PluginInterface.UiBuilder.Draw -= windowSystem.Draw;
+        PluginInterface.UiBuilder.Draw -= FileDialogManager.Draw;
         windowSystem.RemoveAllWindows();
         Watcher.StateChanged -= OnStateChanged;
         Watcher.Dispose();
