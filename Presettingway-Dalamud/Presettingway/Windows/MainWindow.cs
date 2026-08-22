@@ -31,6 +31,7 @@ public class MainWindow : Window, IDisposable
     private int selectedWeatherIndex;
     private string zoneFilter = string.Empty;
     private string weatherFilter = string.Empty;
+    private string rulesFilter = string.Empty;
     private string? lastWeatherQuickPick;
 
     private bool useCurrentZone = true;
@@ -199,6 +200,27 @@ public class MainWindow : Window, IDisposable
 
         // --- Preset path ---
         ImGui.InputText("Preset path", ref presetPathInput, 512);
+        if (ImGui.Button("Browse..."))
+        {
+            // Filter format below is the standard convention for this class of
+            // ImGui file dialog (goatcorp's own port, closely related to the
+            // widely-used aiekick/ImGuiFileDialog C++ library) but isn't
+            // independently verified against Dalamud's exact parser this
+            // session -- harmless if slightly off, since the dialog's own
+            // filter dropdown still lets you pick "all files" regardless.
+            var startPath = string.IsNullOrWhiteSpace(plugin.Configuration.PresetsFolder) ? null : plugin.Configuration.PresetsFolder;
+            plugin.FileDialogManager.OpenFileDialog(
+                "Select a ReShade preset",
+                ".ini",
+                (success, paths) =>
+                {
+                    if (success && paths.Count > 0)
+                        presetPathInput = paths[0];
+                },
+                1,
+                startPath);
+        }
+        ImGui.SameLine();
         if (ImGui.Button("Use current preset"))
             TryFillCurrentPreset();
 
@@ -377,9 +399,19 @@ public class MainWindow : Window, IDisposable
             return;
         }
 
+        if (plugin.RulesEditable.Count > 5)
+            ImGui.InputTextWithHint("##RulesFilter", "Filter (zone, weather, time, label, or path)...", ref rulesFilter, 128);
+
+        var anyShown = false;
         for (var i = plugin.RulesEditable.Count - 1; i >= 0; i--)
         {
             var rule = plugin.RulesEditable[i];
+            var description = DescribeRule(rule);
+
+            if (!string.IsNullOrEmpty(rulesFilter) && description.IndexOf(rulesFilter, StringComparison.OrdinalIgnoreCase) < 0)
+                continue;
+
+            anyShown = true;
             ImGui.PushID(i);
 
             // Buttons first, description after: keeps them visible regardless of
@@ -391,10 +423,13 @@ public class MainWindow : Window, IDisposable
             if (ImGui.Button("Remove"))
                 plugin.RemoveRule(rule);
             ImGui.SameLine();
-            ImGui.TextWrapped(DescribeRule(rule));
+            ImGui.TextWrapped(description);
 
             ImGui.PopID();
         }
+
+        if (!anyShown && !string.IsNullOrEmpty(rulesFilter))
+            ImGui.TextUnformatted("(no rules match that filter)");
     }
 
     private void LoadRuleIntoForm(PresetRule rule)

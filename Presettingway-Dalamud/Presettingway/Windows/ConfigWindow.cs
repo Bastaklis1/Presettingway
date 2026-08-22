@@ -66,6 +66,20 @@ public class ConfigWindow : Window, IDisposable
             config.ReShadeIniPath = Plugin.CleanPathInput(reshadeIniPathInput);
             config.Save();
         }
+        if (ImGui.Button("Browse...##ReShadeIniBrowse"))
+        {
+            plugin.FileDialogManager.OpenFileDialog(
+                "Select ReShade.ini",
+                ".ini",
+                (success, path) =>
+                {
+                    if (!success)
+                        return;
+                    reshadeIniPathInput = path;
+                    config.ReShadeIniPath = path;
+                    config.Save();
+                });
+        }
 
         ImGui.Separator();
         ImGui.TextUnformatted("Presets folder (optional -- relative preset paths get resolved against this):");
@@ -73,6 +87,19 @@ public class ConfigWindow : Window, IDisposable
         {
             config.PresetsFolder = Plugin.CleanPathInput(presetsFolderInput);
             config.Save();
+        }
+        if (ImGui.Button("Browse...##PresetsFolderBrowse"))
+        {
+            plugin.FileDialogManager.OpenFolderDialog(
+                "Select your presets folder",
+                (success, path) =>
+                {
+                    if (!success)
+                        return;
+                    presetsFolderInput = path;
+                    config.PresetsFolder = path;
+                    config.Save();
+                });
         }
 
         ImGui.Separator();
