@@ -17,7 +17,7 @@ namespace Presettingway;
 
 public sealed class Plugin : IDalamudPlugin
 {
-    private const string CommandName = "/presettingway";
+    private const string CommandName = "/pway";
     private const string SharingwayProviderName = "Presettingway";
 
     // TimeOfDay needs the string converter, or a rules file with "timeOfDay": "Night"
@@ -75,6 +75,7 @@ public sealed class Plugin : IDalamudPlugin
 
         Watcher = new GameStateWatcher(ClientState, Framework, Log, Configuration);
         Watcher.StateChanged += OnStateChanged;
+        Framework.Update += OnFrameworkUpdateForWeathermanPolling;
 
         mainWindow = new MainWindow(this);
         configWindow = new ConfigWindow(this);
@@ -203,7 +204,7 @@ public sealed class Plugin : IDalamudPlugin
         var iniPath = CleanPathInput(Configuration.ReShadeIniPath ?? string.Empty);
         if (string.IsNullOrWhiteSpace(iniPath) || !File.Exists(iniPath))
         {
-            Log.Warning($"Presettingway: ReShade.ini not found at '{iniPath}'. Set the correct path in Presettingway settings (/presettingway config).");
+            Log.Warning($"Presettingway: ReShade.ini not found at '{iniPath}'. Set the correct path in Presettingway settings (/pway config).");
             return null;
         }
 
@@ -325,7 +326,7 @@ public sealed class Plugin : IDalamudPlugin
         SaveRules();
     }
 
-    private string ResolveRulesPath()
+    internal string ResolveRulesPath()
     {
         var configured = Configuration.RulesFilePath;
         return Path.IsPathRooted(configured)
@@ -390,6 +391,50 @@ public sealed class Plugin : IDalamudPlugin
             .FirstOrDefault(p => WeathermanInternalNames.Contains(p.InternalName) && p.IsLoaded)
             ?.InternalName;
         return weathermanInternalName != null;
+    }
+
+    /// <summary>
+    /// Presettingway previously only rechecked Weatherman's state when its own
+    /// real-state-change event fired (a real zone/weather/time change) -- if
+    /// Weatherman got toggled on/off/paused without any real state actually
+    /// changing, nothing told Presettingway to look again, so it kept
+    /// publishing stale data until the next real change. This polls
+    /// Weatherman's IPC independently, on the same ~1s cadence as real state
+    /// polling, and republishes immediately if anything Weatherman-related
+    /// actually changed -- regardless of real game state. Zero overhead when
+    /// the Weatherman checkbox is off (RefreshWeathermanStatus returns
+    /// immediately without any IPC call in that case).
+    /// </summary>
+    private long lastWeathermanPollTicks = Environment.TickCount64;
+    private const double WeathermanPollIntervalSeconds = 1.0;
+
+    private void OnFrameworkUpdateForWeathermanPolling(IFramework fw)
+    {
+        var now = Environment.TickCount64;
+        if ((now - lastWeathermanPollTicks) / 1000.0 < WeathermanPollIntervalSeconds)
+            return;
+        lastWeathermanPollTicks = now;
+
+        if (!Configuration.CheckWeathermanOverrides)
+            return;
+
+        var previousWeatherActive = WeathermanWeatherOverrideActive;
+        var previousWeatherId = WeathermanDisplayedWeatherId;
+        var previousTimeActive = WeathermanTimeOverrideActive;
+        var previousTimeOfDay = WeathermanDisplayedTimeOfDay;
+
+        RefreshWeathermanStatus();
+
+        var changed = previousWeatherActive != WeathermanWeatherOverrideActive
+            || previousWeatherId != WeathermanDisplayedWeatherId
+            || previousTimeActive != WeathermanTimeOverrideActive
+            || previousTimeOfDay != WeathermanDisplayedTimeOfDay;
+
+        if (changed)
+        {
+            Log.Debug("Presettingway: Weatherman state changed independent of any zone/weather/time change; republishing.");
+            PublishEffectiveState();
+        }
     }
 
     private void RefreshWeathermanStatus()
@@ -572,6 +617,7 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.Draw -= FileDialogManager.Draw;
         windowSystem.RemoveAllWindows();
         Watcher.StateChanged -= OnStateChanged;
+        Framework.Update -= OnFrameworkUpdateForWeathermanPolling;
         Watcher.Dispose();
         sharingwayProvider?.Dispose();
     }
