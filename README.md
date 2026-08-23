@@ -40,7 +40,7 @@ Weatherman that is offered in a fork linked below until next official build rele
    https://raw.githubusercontent.com/Bastaklis1/Presettingway/main/pluginmaster.json
    ```
 3. `/xlplugins` -> find Presettingway -> install.
-4. `/presettingway` opens the window. First thing to do: add a rule or two,
+4. `/pway` opens the window. First thing to do: add a rule or two,
    pointing at real preset files on your machine.
 
 ### Presettingway (ReShade addon) -- separate, manual step, always

@@ -18,6 +18,11 @@ public class MainWindow : Window, IDisposable
         "Clear Skies", "Fair Skies", "Clouds", "Fog", "Rain", "Snow",
     };
 
+    // Below this per-column width, a 3-column row falls back to stacking
+    // everything vertically instead -- avoids columns squeezing down to
+    // nothing/overlapping on a narrow window.
+    private const float MinColumnWidth = 170f;
+
     private readonly Plugin plugin;
 
     // Cached once from Plugin.ZoneList/WeatherList (built once at plugin load)
@@ -31,7 +36,7 @@ public class MainWindow : Window, IDisposable
     private int selectedWeatherIndex;
     private string zoneFilter = string.Empty;
     private string weatherFilter = string.Empty;
-    private string? lastWeatherQuickPick;
+    private string rulesFilter = string.Empty;
 
     private bool useCurrentZone = true;
     private bool useCurrentWeather = true;
@@ -54,7 +59,7 @@ public class MainWindow : Window, IDisposable
     {
         this.plugin = plugin;
 
-        Size = new Vector2(640, 680);
+        Size = new Vector2(700, 700);
         SizeCondition = ImGuiCond.FirstUseEver;
 
         zoneNames = new[] { "(Any zone)" }.Concat(plugin.ZoneList.Select(z => $"{z.Name} ({z.Id})")).ToArray();
@@ -73,6 +78,31 @@ public class MainWindow : Window, IDisposable
         DrawRulesList();
     }
 
+    /// <summary>
+    /// Three side-by-side sections when there's room, stacked vertically when
+    /// there isn't -- rather than letting a narrow window squeeze real ImGui
+    /// columns down until content overlaps or gets cut off.
+    /// </summary>
+    private static void DrawThreeColumns(string id, Action left, Action center, Action right)
+    {
+        var avail = ImGui.GetContentRegionAvail().X;
+        if (avail / 3f < MinColumnWidth)
+        {
+            left();
+            center();
+            right();
+            return;
+        }
+
+        ImGui.Columns(3, id, false);
+        left();
+        ImGui.NextColumn();
+        center();
+        ImGui.NextColumn();
+        right();
+        ImGui.Columns(1);
+    }
+
     private void DrawStatus()
     {
         var w = plugin.Watcher;
@@ -80,33 +110,37 @@ public class MainWindow : Window, IDisposable
         if (ImGui.Button("Settings"))
             plugin.OpenSettings();
 
-        ImGui.TextUnformatted($"Zone: {plugin.GetZoneName(w.CurrentTerritoryId)} ({w.CurrentTerritoryId})");
-        ImGui.TextUnformatted($"Weather: {plugin.GetWeatherName(w.CurrentWeatherId)} ({w.CurrentWeatherId})");
-        ImGui.TextUnformatted($"Time of day: {w.CurrentTimeOfDay}  (Eorzea hour {w.CurrentEorzeaHour:F2})");
-
-        // Weatherman awareness: show its actual values right alongside the real
-        // ones whenever an override is active and readable, rather than a vague
-        // "won't match" warning. These are also what's actually driving rule
-        // resolution below -- see Plugin.GetEffectiveState().
-        if (plugin.WeathermanWeatherOverrideActive == true)
-        {
-            var label = plugin.WeathermanDisplayedWeatherId.HasValue
-                ? plugin.GetWeatherName(plugin.WeathermanDisplayedWeatherId.Value)
-                : "(active, but couldn't be read — see /xllog)";
-            ImGui.TextUnformatted($"Weatherman weather: {label}");
-        }
-
-        if (plugin.WeathermanTimeOverrideActive == true)
-        {
-            var label = plugin.WeathermanDisplayedTimeOfDay.HasValue
-                ? plugin.WeathermanDisplayedTimeOfDay.Value.ToString()
-                : "(active, but couldn't be read — see /xllog)";
-            ImGui.TextUnformatted($"Weatherman time of day: {label}");
-        }
+        DrawThreeColumns("StatusRow1",
+            () => ImGui.TextUnformatted($"Zone: {plugin.GetZoneName(w.CurrentTerritoryId)} ({w.CurrentTerritoryId})"),
+            () => ImGui.TextUnformatted($"Weather: {plugin.GetWeatherName(w.CurrentWeatherId)} ({w.CurrentWeatherId})"),
+            () => ImGui.TextUnformatted($"Time of day: {w.CurrentTimeOfDay}  (Eorzea hour {w.CurrentEorzeaHour:F2})"));
 
         var (effTerritoryId, effWeatherId, effTimeOfDay) = plugin.GetEffectiveState();
         var rule = plugin.RuleEngine.Resolve(effTerritoryId, effWeatherId, effTimeOfDay);
-        ImGui.TextUnformatted($"Resolved preset: {(rule?.PresetPath ?? "(no matching rule)")}");
+        var resolvedLabel = rule?.PresetPath is { Length: > 0 } presetPath ? Path.GetFileName(presetPath) : "(no matching rule)";
+
+        DrawThreeColumns("StatusRow2",
+            () => ImGui.TextUnformatted($"Resolved preset: {resolvedLabel}"),
+            () =>
+            {
+                if (plugin.WeathermanWeatherOverrideActive == true)
+                {
+                    var label = plugin.WeathermanDisplayedWeatherId.HasValue
+                        ? plugin.GetWeatherName(plugin.WeathermanDisplayedWeatherId.Value)
+                        : "(couldn't be read — /xllog)";
+                    ImGui.TextUnformatted($"Weatherman weather: {label}");
+                }
+            },
+            () =>
+            {
+                if (plugin.WeathermanTimeOverrideActive == true)
+                {
+                    var label = plugin.WeathermanDisplayedTimeOfDay.HasValue
+                        ? plugin.WeathermanDisplayedTimeOfDay.Value.ToString()
+                        : "(couldn't be read — /xllog)";
+                    ImGui.TextUnformatted($"Weatherman time of day: {label}");
+                }
+            });
 
         // Only warn when we're silently falling back -- i.e. Weatherman says an
         // override is active but we couldn't actually read its value. When
@@ -123,76 +157,79 @@ public class MainWindow : Window, IDisposable
 
     private void DrawAddRuleForm()
     {
-        var w = plugin.Watcher;
-        var (_, effWeatherId, effTimeOfDay) = plugin.GetEffectiveState();
         ImGui.TextUnformatted(editingExistingRule ? "Edit rule (Add rule below to save changes)" : "Add a rule");
 
-        // --- Simple: zone ---
-        ImGui.Checkbox("Use current zone", ref useCurrentZone);
-        if (useCurrentZone)
-            ImGui.TextUnformatted($"    -> {plugin.GetZoneName(w.CurrentTerritoryId)}");
+        DrawThreeColumns("AddRuleCheckboxes",
+            () => ImGui.Checkbox("Use current zone", ref useCurrentZone),
+            () => ImGui.Checkbox("Use current weather", ref useCurrentWeather),
+            () => ImGui.Checkbox("Use current time of day", ref useCurrentTimeOfDay));
 
-        // --- Simple: weather ---
-        ImGui.Checkbox("Use current weather", ref useCurrentWeather);
-        if (useCurrentWeather)
-        {
-            // Uses the effective (Weatherman-aware) value, not the raw real
-            // reading -- if Weatherman has an active, readable override,
-            // "current" should mean what you're actually seeing, same as
-            // what actually drives rule resolution/publishing.
-            var weathermanNote = plugin.WeathermanWeatherOverrideActive == true && plugin.WeathermanDisplayedWeatherId.HasValue
-                ? " (from Weatherman)"
-                : string.Empty;
-            ImGui.TextUnformatted($"    -> {plugin.GetWeatherName(effWeatherId)}{weathermanNote}");
-        }
-        else
-        {
-            ImGui.TextUnformatted("    Quick pick:");
-            for (var i = 0; i < CommonWeatherNames.Length; i++)
+        // Zone/weather/time pickers are always visible now rather than hidden
+        // behind unchecking "use current" -- just disabled (greyed out) when
+        // "use current" is checked, matching how the Advanced section already
+        // behaved. Split across two rows since the weather buttons and
+        // time-of-day checkboxes don't comfortably fit six/four-across in one.
+        DrawThreeColumns("AddRulePickersRowA",
+            () =>
             {
-                if (i > 0)
-                    ImGui.SameLine();
-                if (ImGui.Button(CommonWeatherNames[i]))
-                {
-                    var idx = Array.FindIndex(weatherNames, n => n.StartsWith(CommonWeatherNames[i], StringComparison.OrdinalIgnoreCase));
-                    if (idx >= 0)
-                    {
-                        selectedWeatherIndex = idx;
-                        lastWeatherQuickPick = CommonWeatherNames[i];
-                    }
-                    else
-                    {
-                        Plugin.ChatGui.Print($"[Presettingway] Couldn't find '{CommonWeatherNames[i]}' in the weather sheet — pick it from Advanced instead.");
-                    }
-                }
-            }
+                ImGui.BeginDisabled(useCurrentZone);
+                ImGui.SetNextItemWidth(220);
+                if (zoneNames.Length > 1)
+                    DrawFilterableCombo("##ZonePicker", zoneNames, ref selectedZoneIndex, ref zoneFilter);
+                else
+                    ImGui.TextUnformatted("(zone list unavailable)");
+                ImGui.EndDisabled();
+            },
+            () =>
+            {
+                ImGui.BeginDisabled(useCurrentWeather);
+                DrawWeatherQuickPickButton(0);
+                ImGui.SameLine();
+                DrawWeatherQuickPickButton(1);
+                ImGui.SameLine();
+                DrawWeatherQuickPickButton(2);
+                ImGui.EndDisabled();
+            },
+            () =>
+            {
+                ImGui.BeginDisabled(useCurrentTimeOfDay);
+                ImGui.Checkbox("Dawn", ref dawnChecked);
+                ImGui.SameLine();
+                ImGui.Checkbox("Day", ref dayChecked);
+                ImGui.EndDisabled();
+            });
 
-            // Visible confirmation of what clicking a quick-pick button actually
-            // did -- previously the only feedback was the Advanced dropdown's
-            // preview text, which is invisible while Advanced is collapsed.
-            var currentSelectionLabel = weatherNames[Math.Clamp(selectedWeatherIndex, 0, weatherNames.Length - 1)];
-            ImGui.TextUnformatted($"    Selected: {currentSelectionLabel}");
-        }
+        DrawThreeColumns("AddRulePickersRowB",
+            () => { },
+            () =>
+            {
+                ImGui.BeginDisabled(useCurrentWeather);
+                DrawWeatherQuickPickButton(3);
+                ImGui.SameLine();
+                DrawWeatherQuickPickButton(4);
+                ImGui.SameLine();
+                DrawWeatherQuickPickButton(5);
+                ImGui.EndDisabled();
+            },
+            () =>
+            {
+                ImGui.BeginDisabled(useCurrentTimeOfDay);
+                ImGui.Checkbox("Dusk", ref duskChecked);
+                ImGui.SameLine();
+                ImGui.Checkbox("Night", ref nightChecked);
+                ImGui.EndDisabled();
+            });
 
-        // --- Simple: time of day ---
-        ImGui.Checkbox("Use current time of day", ref useCurrentTimeOfDay);
-        if (useCurrentTimeOfDay)
+        // Exact weather picker only now -- zone's exact picker moved up into
+        // the row above, width-capped, instead of living here.
+        if (ImGui.CollapsingHeader("Advanced (exact weather picker)"))
         {
-            var weathermanNote = plugin.WeathermanTimeOverrideActive == true && plugin.WeathermanDisplayedTimeOfDay.HasValue
-                ? " (from Weatherman)"
-                : string.Empty;
-            ImGui.TextUnformatted($"    -> {effTimeOfDay}{weathermanNote}");
-        }
-        else
-        {
-            ImGui.TextUnformatted("    Check any that should use this preset (none checked = any time):");
-            ImGui.Checkbox("Dawn", ref dawnChecked);
-            ImGui.SameLine();
-            ImGui.Checkbox("Day", ref dayChecked);
-            ImGui.SameLine();
-            ImGui.Checkbox("Dusk", ref duskChecked);
-            ImGui.SameLine();
-            ImGui.Checkbox("Night", ref nightChecked);
+            ImGui.BeginDisabled(useCurrentWeather);
+            if (weatherNames.Length > 1)
+                DrawFilterableCombo("Weather", weatherNames, ref selectedWeatherIndex, ref weatherFilter);
+            else
+                ImGui.TextUnformatted("(Weather list unavailable — check /xllog.)");
+            ImGui.EndDisabled();
         }
 
         ImGui.Separator();
@@ -201,6 +238,27 @@ public class MainWindow : Window, IDisposable
         ImGui.InputText("Preset path", ref presetPathInput, 512);
         if (ImGui.Button("Use current preset"))
             TryFillCurrentPreset();
+        ImGui.SameLine();
+        if (ImGui.Button("Browse..."))
+        {
+            // Filter format below is the standard convention for this class of
+            // ImGui file dialog (goatcorp's own port, closely related to the
+            // widely-used aiekick/ImGuiFileDialog C++ library) but isn't
+            // independently verified against Dalamud's exact parser this
+            // session -- harmless if slightly off, since the dialog's own
+            // filter dropdown still lets you pick "all files" regardless.
+            var startPath = string.IsNullOrWhiteSpace(plugin.Configuration.PresetsFolder) ? null : plugin.Configuration.PresetsFolder;
+            plugin.FileDialogManager.OpenFileDialog(
+                "Select a ReShade preset",
+                ".ini",
+                (success, paths) =>
+                {
+                    if (success && paths.Count > 0)
+                        presetPathInput = paths[0];
+                },
+                1,
+                startPath);
+        }
 
         if (!string.IsNullOrWhiteSpace(plugin.Configuration.PresetsFolder))
         {
@@ -211,6 +269,8 @@ public class MainWindow : Window, IDisposable
 
         ImGui.InputText("Label (optional)", ref labelInput, 128);
 
+        ImGui.TextWrapped(BuildRulePreviewText());
+
         if (ImGui.Button(editingExistingRule ? "Save changes" : "Add rule"))
             AddRuleFromForm();
 
@@ -220,24 +280,61 @@ public class MainWindow : Window, IDisposable
             if (ImGui.Button("Cancel edit"))
                 ResetForm();
         }
+    }
 
-        // --- Advanced: exact zone/weather pickers, collapsed by default ---
-        if (ImGui.CollapsingHeader("Advanced (exact zone / weather picker)"))
+    private void DrawWeatherQuickPickButton(int commonWeatherIndex)
+    {
+        var name = CommonWeatherNames[commonWeatherIndex];
+        if (ImGui.Button(name))
         {
-            ImGui.BeginDisabled(useCurrentZone);
-            if (zoneNames.Length > 1)
-                DrawFilterableCombo("Zone", zoneNames, ref selectedZoneIndex, ref zoneFilter);
+            var idx = Array.FindIndex(weatherNames, n => n.StartsWith(name, StringComparison.OrdinalIgnoreCase));
+            if (idx >= 0)
+                selectedWeatherIndex = idx;
             else
-                ImGui.TextUnformatted("(Zone list unavailable — check /xllog.)");
-            ImGui.EndDisabled();
-
-            ImGui.BeginDisabled(useCurrentWeather);
-            if (weatherNames.Length > 1)
-                DrawFilterableCombo("Weather", weatherNames, ref selectedWeatherIndex, ref weatherFilter);
-            else
-                ImGui.TextUnformatted("(Weather list unavailable — check /xllog.)");
-            ImGui.EndDisabled();
+                Plugin.ChatGui.Print($"[Presettingway] Couldn't find '{name}' in the weather sheet — pick it from Advanced instead.");
         }
+    }
+
+    /// <summary>
+    /// One consolidated summary of what "Add rule" will actually create,
+    /// replacing the old scattered "-> X" feedback lines and "Selected:" text
+    /// that used to sit under each individual control.
+    /// </summary>
+    private string BuildRulePreviewText()
+    {
+        var w = plugin.Watcher;
+        var (_, effWeatherId, effTimeOfDay) = plugin.GetEffectiveState();
+
+        var territoryId = useCurrentZone
+            ? w.CurrentTerritoryId
+            : zoneIds[Math.Clamp(selectedZoneIndex, 0, zoneIds.Length - 1)];
+        var weatherId = useCurrentWeather
+            ? effWeatherId
+            : weatherIds[Math.Clamp(selectedWeatherIndex, 0, weatherIds.Length - 1)];
+
+        var zoneLabel = territoryId.HasValue ? plugin.GetZoneName(territoryId.Value) : "any zone";
+        var weatherLabel = weatherId.HasValue ? plugin.GetWeatherName(weatherId.Value) : "any weather";
+
+        string timeLabel;
+        if (useCurrentTimeOfDay)
+        {
+            timeLabel = effTimeOfDay.ToString();
+        }
+        else
+        {
+            var times = new List<string>();
+            if (dawnChecked) times.Add("Dawn");
+            if (dayChecked) times.Add("Day");
+            if (duskChecked) times.Add("Dusk");
+            if (nightChecked) times.Add("Night");
+            timeLabel = times.Count > 0 ? string.Join("/", times) : "any time";
+        }
+
+        var presetLabel = string.IsNullOrWhiteSpace(presetPathInput)
+            ? "(no preset selected)"
+            : Path.GetFileName(Plugin.CleanPathInput(presetPathInput));
+
+        return $"Creating rule for: '{zoneLabel}', '{weatherLabel}', '{timeLabel}' using '{presetLabel}'";
     }
 
     /// <summary>
@@ -290,7 +387,7 @@ public class MainWindow : Window, IDisposable
         var path = plugin.TryReadCurrentReShadePresetPath();
         if (path is null)
         {
-            Plugin.ChatGui.Print("[Presettingway] Couldn't read a current preset from ReShade.ini — set the correct path in Settings (/presettingway config), or type the preset path in manually.");
+            Plugin.ChatGui.Print("[Presettingway] Couldn't read a current preset from ReShade.ini — set the correct path in Settings (/pway config), or type the preset path in manually.");
             return;
         }
 
@@ -377,9 +474,19 @@ public class MainWindow : Window, IDisposable
             return;
         }
 
+        if (plugin.RulesEditable.Count > 5)
+            ImGui.InputTextWithHint("##RulesFilter", "Filter (zone, weather, time, label, or path)...", ref rulesFilter, 128);
+
+        var anyShown = false;
         for (var i = plugin.RulesEditable.Count - 1; i >= 0; i--)
         {
             var rule = plugin.RulesEditable[i];
+            var description = DescribeRule(rule);
+
+            if (!string.IsNullOrEmpty(rulesFilter) && description.IndexOf(rulesFilter, StringComparison.OrdinalIgnoreCase) < 0)
+                continue;
+
+            anyShown = true;
             ImGui.PushID(i);
 
             // Buttons first, description after: keeps them visible regardless of
@@ -391,10 +498,13 @@ public class MainWindow : Window, IDisposable
             if (ImGui.Button("Remove"))
                 plugin.RemoveRule(rule);
             ImGui.SameLine();
-            ImGui.TextWrapped(DescribeRule(rule));
+            ImGui.TextWrapped(description);
 
             ImGui.PopID();
         }
+
+        if (!anyShown && !string.IsNullOrEmpty(rulesFilter))
+            ImGui.TextUnformatted("(no rules match that filter)");
     }
 
     private void LoadRuleIntoForm(PresetRule rule)
