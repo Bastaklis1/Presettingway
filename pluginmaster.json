@@ -4,7 +4,7 @@
     "Name": "Presettingway",
     "InternalName": "Presettingway",
     "AssemblyVersion": "0.1.1.1",
-    "Description": "Reads the current zone, weather, and time of day and publishes them over a Sharingway IPC channel so a companion ReShade addon can switch presets automatically. Use /presettingway to open the window, /presettingway status for a text summary, /presettingway config for settings.",
+    "Description": "Reads the current zone, weather, and time of day and publishes them over a Sharingway IPC channel so a companion ReShade addon can switch presets automatically. Use /pway to open the window, /pway status for a text summary, /pway config for settings.",
     "Punchline": "Automatically switches ReShade presets based on zone, weather, and time of day.",
     "ApplicableVersion": "any",
     "Tags": ["reshade", "weather", "zone", "automation"],
