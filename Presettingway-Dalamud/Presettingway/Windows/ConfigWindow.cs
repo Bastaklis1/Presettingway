@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
@@ -16,7 +17,7 @@ public class ConfigWindow : Window, IDisposable
     public ConfigWindow(Plugin plugin) : base("Presettingway Settings###PresettingwaySettings")
     {
         this.plugin = plugin;
-        Size = new Vector2(480, 400);
+        Size = new Vector2(500, 440);
         SizeCondition = ImGuiCond.FirstUseEver;
     }
 
@@ -35,7 +36,7 @@ public class ConfigWindow : Window, IDisposable
         }
 
         ImGui.TextUnformatted("Time-of-day cutoffs (Eorzea hour, 0-24).");
-        ImGui.TextUnformatted("Tune these against what you actually see in-game — don't trust anyone's stated numbers, including ours.");
+        ImGui.TextUnformatted("Tune these against what you see in-game or prefer.");
         ImGui.Separator();
 
         var dawn = (float)config.DawnStartHour;
@@ -60,6 +61,9 @@ public class ConfigWindow : Window, IDisposable
 
         ImGui.Separator();
         ImGui.TextUnformatted("ReShade.ini path (the one next to ffxiv_dx11.exe, not a preset file):");
+        ImGui.TextWrapped(
+            "Must be the path to and including \"\\ReShade.ini\". Default location: " +
+            "C:\\Program Files (x86)\\Square Enix\\FINAL FANTASY XIV - A Realm Reborn\\game\\ReShade.ini");
         ImGui.TextUnformatted("Used by the \"Use current preset\" button in the main window.");
         if (ImGui.InputText("##ReShadeIniPath", ref reshadeIniPathInput, 512))
         {
@@ -101,6 +105,12 @@ public class ConfigWindow : Window, IDisposable
                     config.Save();
                 });
         }
+        if (!string.IsNullOrWhiteSpace(config.PresetsFolder))
+        {
+            ImGui.SameLine();
+            if (ImGui.Button("Copy path##PresetsFolderCopy"))
+                ImGui.SetClipboardText(config.PresetsFolder);
+        }
 
         ImGui.Separator();
         var checkWeatherman = config.CheckWeathermanOverrides;
@@ -111,8 +121,8 @@ public class ConfigWindow : Window, IDisposable
         }
         ImGui.TextWrapped(
             "Off by default: Presettingway won't touch Weatherman at all unless this is checked. " +
-            "When on, and Weatherman has an active override, you'll see a warning that the real " +
-            "zone/weather/time above may not match what you're actually seeing in-game.");
+            "When on, and Weatherman has an active override, its weather/time show up alongside " +
+            "the real values above and are what actually drive preset switching.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("Default preset (optional -- used when no rule matches at all):");
@@ -126,7 +136,11 @@ public class ConfigWindow : Window, IDisposable
         }
 
         ImGui.Separator();
-        ImGui.TextUnformatted($"Rules file: {plugin.Configuration.RulesFilePath}");
+        var rulesPath = plugin.ResolveRulesPath();
+        ImGui.TextUnformatted($"Rules file: {rulesPath}");
+        if (ImGui.Button("Copy path##RulesFileCopy"))
+            ImGui.SetClipboardText(rulesPath);
+        ImGui.SameLine();
         if (ImGui.Button("Reload rules from disk"))
         {
             if (plugin.LoadRules())
