@@ -33,7 +33,13 @@ public class MainWindow : Window, IDisposable
     private readonly byte?[] weatherIds;
 
     private int selectedZoneIndex;
+
+    // The Advanced Weather dropdown's own single selection -- used directly
+    // when useCurrentWeather is on, and as the fallback when none of the
+    // quick-pick checkboxes below are checked.
     private int selectedWeatherIndex;
+    private readonly bool[] commonWeatherChecked = new bool[CommonWeatherNames.Length];
+
     private string zoneFilter = string.Empty;
     private string weatherFilter = string.Empty;
     private string rulesFilter = string.Empty;
@@ -59,7 +65,7 @@ public class MainWindow : Window, IDisposable
     {
         this.plugin = plugin;
 
-        Size = new Vector2(700, 700);
+        Size = new Vector2(700, 720);
         SizeCondition = ImGuiCond.FirstUseEver;
 
         zoneNames = new[] { "(Any zone)" }.Concat(plugin.ZoneList.Select(z => $"{z.Name} ({z.Id})")).ToArray();
@@ -164,11 +170,13 @@ public class MainWindow : Window, IDisposable
             () => ImGui.Checkbox("Use current weather", ref useCurrentWeather),
             () => ImGui.Checkbox("Use current time of day", ref useCurrentTimeOfDay));
 
-        // Zone/weather/time pickers are always visible now rather than hidden
+        // Zone/weather/time pickers are always visible rather than hidden
         // behind unchecking "use current" -- just disabled (greyed out) when
-        // "use current" is checked, matching how the Advanced section already
-        // behaved. Split across two rows since the weather buttons and
-        // time-of-day checkboxes don't comfortably fit six/four-across in one.
+        // "use current" is checked. Weather quick-picks are now checkboxes,
+        // not buttons: checking more than one creates one rule per checked
+        // weather, crossed with however many time-of-day boxes are checked
+        // (2 weathers x 2 times = 4 rules) -- see BuildRulePreviewText, which
+        // always states the actual count so this isn't a surprise.
         DrawThreeColumns("AddRulePickersRowA",
             () =>
             {
@@ -183,11 +191,11 @@ public class MainWindow : Window, IDisposable
             () =>
             {
                 ImGui.BeginDisabled(useCurrentWeather);
-                DrawWeatherQuickPickButton(0);
+                DrawWeatherCheckbox(0);
                 ImGui.SameLine();
-                DrawWeatherQuickPickButton(1);
+                DrawWeatherCheckbox(1);
                 ImGui.SameLine();
-                DrawWeatherQuickPickButton(2);
+                DrawWeatherCheckbox(2);
                 ImGui.EndDisabled();
             },
             () =>
@@ -204,11 +212,11 @@ public class MainWindow : Window, IDisposable
             () =>
             {
                 ImGui.BeginDisabled(useCurrentWeather);
-                DrawWeatherQuickPickButton(3);
+                DrawWeatherCheckbox(3);
                 ImGui.SameLine();
-                DrawWeatherQuickPickButton(4);
+                DrawWeatherCheckbox(4);
                 ImGui.SameLine();
-                DrawWeatherQuickPickButton(5);
+                DrawWeatherCheckbox(5);
                 ImGui.EndDisabled();
             },
             () =>
@@ -220,17 +228,28 @@ public class MainWindow : Window, IDisposable
                 ImGui.EndDisabled();
             });
 
-        // Exact weather picker only now -- zone's exact picker moved up into
-        // the row above, width-capped, instead of living here.
-        if (ImGui.CollapsingHeader("Advanced (exact weather picker)"))
-        {
-            ImGui.BeginDisabled(useCurrentWeather);
-            if (weatherNames.Length > 1)
-                DrawFilterableCombo("Weather", weatherNames, ref selectedWeatherIndex, ref weatherFilter);
-            else
-                ImGui.TextUnformatted("(Weather list unavailable — check /xllog.)");
-            ImGui.EndDisabled();
-        }
+        // Advanced Weather: no longer hidden behind a collapsing header --
+        // always visible, centered under the weather column, width-capped so
+        // it doesn't stretch. Only actually used when none of the quick-pick
+        // checkboxes above are checked (see ResolveSelectedWeatherIds).
+        DrawThreeColumns("AddRulePickersRowC",
+            () => { },
+            () =>
+            {
+                ImGui.BeginDisabled(useCurrentWeather);
+                const float dropdownWidth = 220f;
+                var colWidth = ImGui.GetContentRegionAvail().X;
+                var offset = Math.Max(0f, (colWidth - dropdownWidth) / 2f);
+                if (offset > 0f)
+                    ImGui.SetCursorPosX(ImGui.GetCursorPosX() + offset);
+                ImGui.SetNextItemWidth(dropdownWidth);
+                if (weatherNames.Length > 1)
+                    DrawFilterableCombo("Advanced Weather", weatherNames, ref selectedWeatherIndex, ref weatherFilter);
+                else
+                    ImGui.TextUnformatted("(unavailable)");
+                ImGui.EndDisabled();
+            },
+            () => { });
 
         ImGui.Separator();
 
@@ -282,23 +301,44 @@ public class MainWindow : Window, IDisposable
         }
     }
 
-    private void DrawWeatherQuickPickButton(int commonWeatherIndex)
+    private void DrawWeatherCheckbox(int commonWeatherIndex) =>
+        ImGui.Checkbox(CommonWeatherNames[commonWeatherIndex], ref commonWeatherChecked[commonWeatherIndex]);
+
+    /// <summary>
+    /// Checked quick-pick boxes win, resolved to real weather IDs by matching
+    /// their names against the actual sheet data (not hardcoded IDs). Falls
+    /// back to whatever the Advanced Weather dropdown currently has selected
+    /// if none are checked -- that dropdown's own default is "(Any weather)",
+    /// i.e. null, so an untouched form still means "any weather" as before.
+    /// </summary>
+    private List<byte?> ResolveSelectedWeatherIds()
     {
-        var name = CommonWeatherNames[commonWeatherIndex];
-        if (ImGui.Button(name))
+        var result = new List<byte?>();
+        for (var i = 0; i < CommonWeatherNames.Length; i++)
         {
-            var idx = Array.FindIndex(weatherNames, n => n.StartsWith(name, StringComparison.OrdinalIgnoreCase));
+            if (!commonWeatherChecked[i])
+                continue;
+
+            var idx = Array.FindIndex(weatherNames, n => n.StartsWith(CommonWeatherNames[i], StringComparison.OrdinalIgnoreCase));
             if (idx >= 0)
-                selectedWeatherIndex = idx;
+                result.Add(weatherIds[idx]);
             else
-                Plugin.ChatGui.Print($"[Presettingway] Couldn't find '{name}' in the weather sheet — pick it from Advanced instead.");
+                Plugin.ChatGui.Print($"[Presettingway] Couldn't find '{CommonWeatherNames[i]}' in the weather sheet — skipped.");
         }
+
+        if (result.Count == 0)
+            result.Add(weatherIds[Math.Clamp(selectedWeatherIndex, 0, weatherIds.Length - 1)]);
+
+        return result;
     }
 
     /// <summary>
     /// One consolidated summary of what "Add rule" will actually create,
     /// replacing the old scattered "-> X" feedback lines and "Selected:" text
-    /// that used to sit under each individual control.
+    /// that used to sit under each individual control. Explicitly states the
+    /// rule count whenever it's more than one, since checking multiple
+    /// weather/time boxes multiplies out (2 weathers x 2 times = 4 rules) and
+    /// that's exactly the kind of thing that shouldn't be a surprise.
     /// </summary>
     private string BuildRulePreviewText()
     {
@@ -308,33 +348,48 @@ public class MainWindow : Window, IDisposable
         var territoryId = useCurrentZone
             ? w.CurrentTerritoryId
             : zoneIds[Math.Clamp(selectedZoneIndex, 0, zoneIds.Length - 1)];
-        var weatherId = useCurrentWeather
-            ? effWeatherId
-            : weatherIds[Math.Clamp(selectedWeatherIndex, 0, weatherIds.Length - 1)];
-
         var zoneLabel = territoryId.HasValue ? plugin.GetZoneName(territoryId.Value) : "any zone";
-        var weatherLabel = weatherId.HasValue ? plugin.GetWeatherName(weatherId.Value) : "any weather";
 
+        List<byte?> weatherIdsToUse;
+        string weatherLabel;
+        if (useCurrentWeather)
+        {
+            weatherIdsToUse = new List<byte?> { effWeatherId };
+            weatherLabel = plugin.GetWeatherName(effWeatherId);
+        }
+        else
+        {
+            weatherIdsToUse = ResolveSelectedWeatherIds();
+            weatherLabel = string.Join("/", weatherIdsToUse.Select(id => id.HasValue ? plugin.GetWeatherName(id.Value) : "any weather"));
+        }
+
+        List<TimeOfDay?> times;
         string timeLabel;
         if (useCurrentTimeOfDay)
         {
+            times = new List<TimeOfDay?> { effTimeOfDay };
             timeLabel = effTimeOfDay.ToString();
         }
         else
         {
-            var times = new List<string>();
-            if (dawnChecked) times.Add("Dawn");
-            if (dayChecked) times.Add("Day");
-            if (duskChecked) times.Add("Dusk");
-            if (nightChecked) times.Add("Night");
-            timeLabel = times.Count > 0 ? string.Join("/", times) : "any time";
+            times = new List<TimeOfDay?>();
+            var timeNames = new List<string>();
+            if (dawnChecked) { times.Add(TimeOfDay.Dawn); timeNames.Add("Dawn"); }
+            if (dayChecked) { times.Add(TimeOfDay.Day); timeNames.Add("Day"); }
+            if (duskChecked) { times.Add(TimeOfDay.Dusk); timeNames.Add("Dusk"); }
+            if (nightChecked) { times.Add(TimeOfDay.Night); timeNames.Add("Night"); }
+            if (times.Count == 0) { times.Add(null); timeNames.Add("any time"); }
+            timeLabel = string.Join("/", timeNames);
         }
 
         var presetLabel = string.IsNullOrWhiteSpace(presetPathInput)
             ? "(no preset selected)"
             : Path.GetFileName(Plugin.CleanPathInput(presetPathInput));
 
-        return $"Creating rule for: '{zoneLabel}', '{weatherLabel}', '{timeLabel}' using '{presetLabel}'";
+        var totalRules = weatherIdsToUse.Count * times.Count;
+        var prefix = totalRules > 1 ? $"Creating {totalRules} rules for:" : "Creating rule for:";
+
+        return $"{prefix} '{zoneLabel}', '{weatherLabel}', '{timeLabel}' using '{presetLabel}'";
     }
 
     /// <summary>
@@ -410,9 +465,12 @@ public class MainWindow : Window, IDisposable
             ? w.CurrentTerritoryId // zone is never Weatherman-overridden, always real
             : zoneIds[Math.Clamp(selectedZoneIndex, 0, zoneIds.Length - 1)];
 
-        byte? weatherId = useCurrentWeather
-            ? effWeatherId // Weatherman's value if it has an active, readable override; real weather otherwise
-            : weatherIds[Math.Clamp(selectedWeatherIndex, 0, weatherIds.Length - 1)];
+        // Weatherman's value if it has an active, readable override; real
+        // weather otherwise -- only relevant when "use current weather" is on,
+        // since checked quick-pick boxes are explicit choices regardless.
+        List<byte?> weatherIdsToUse = useCurrentWeather
+            ? new List<byte?> { effWeatherId }
+            : ResolveSelectedWeatherIds();
 
         List<TimeOfDay?> times;
         if (useCurrentTimeOfDay)
@@ -422,8 +480,9 @@ public class MainWindow : Window, IDisposable
         else
         {
             // Checking multiple boxes creates one rule per checked box (same
-            // zone/weather/preset); checking none means "any time" (one rule
-            // with a null filter).
+            // zone/preset); checking none means "any time" (one rule with a
+            // null filter). Crossed with weatherIdsToUse below, so 2 checked
+            // weathers x 2 checked times makes 4 rules total.
             times = new List<TimeOfDay?>();
             if (dawnChecked) times.Add(TimeOfDay.Dawn);
             if (dayChecked) times.Add(TimeOfDay.Day);
@@ -435,16 +494,19 @@ public class MainWindow : Window, IDisposable
         var resolvedPath = ResolvePresetPathForSave(cleanedPath);
         var label = string.IsNullOrWhiteSpace(labelInput) ? null : Plugin.CleanPathInput(labelInput);
 
-        foreach (var time in times)
+        foreach (var weatherId in weatherIdsToUse)
         {
-            plugin.AddRule(new PresetRule
+            foreach (var time in times)
             {
-                TerritoryId = territoryId,
-                WeatherId = weatherId,
-                TimeOfDayFilter = time,
-                PresetPath = resolvedPath,
-                Label = label,
-            });
+                plugin.AddRule(new PresetRule
+                {
+                    TerritoryId = territoryId,
+                    WeatherId = weatherId,
+                    TimeOfDayFilter = time,
+                    PresetPath = resolvedPath,
+                    Label = label,
+                });
+            }
         }
 
         ResetForm();
@@ -518,6 +580,7 @@ public class MainWindow : Window, IDisposable
 
         var weatherIdx = Array.IndexOf(weatherIds, rule.WeatherId);
         selectedWeatherIndex = weatherIdx >= 0 ? weatherIdx : 0;
+        Array.Clear(commonWeatherChecked); // editing loads into the single Advanced picker, not the checkboxes
 
         dawnChecked = rule.TimeOfDayFilter == TimeOfDay.Dawn;
         dayChecked = rule.TimeOfDayFilter == TimeOfDay.Day;
