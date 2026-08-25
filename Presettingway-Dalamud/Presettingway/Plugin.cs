@@ -318,6 +318,103 @@ public sealed class Plugin : IDalamudPlugin
     {
         RulesEditable.Add(rule);
         SaveRules();
+        TrySavePresetCopy(rule);
+    }
+
+    /// <summary>
+    /// Saves a copy of the rule's preset into PresetsFolder/Presettingway/,
+    /// named "{zoneId|Any}_{weatherId|Any}_{timeOfDay|Any}[_Label].ini".
+    /// Every rule that reaches this point already has one concrete
+    /// zone/weather/time combination -- multi-select weather/time-of-day
+    /// selections were already expanded into separate individual rules
+    /// before AddRule was ever called (see MainWindow.AddRuleFromForm's
+    /// cross-product loop) -- so there's no AND/OR ambiguity to encode here
+    /// at all. Never overwrites silently: any existing file at the target
+    /// name gets moved into an "Old" subfolder (timestamped) first.
+    /// </summary>
+    private void TrySavePresetCopy(PresetRule rule)
+    {
+        if (!Configuration.SaveTaggedPresetCopies)
+            return;
+
+        if (string.IsNullOrWhiteSpace(Configuration.PresetsFolder))
+        {
+            Log.Warning("Presettingway: tagged preset copies are enabled, but no presets folder is set in Settings -- skipping.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(rule.PresetPath) || !File.Exists(rule.PresetPath))
+        {
+            Log.Warning($"Presettingway: couldn't save a tagged copy -- source preset '{rule.PresetPath}' doesn't exist.");
+            return;
+        }
+
+        try
+        {
+            // A folder already carrying its own bundled rules file is a
+            // self-contained collection -- save flat, directly into it,
+            // rather than nesting a "Presettingway" subfolder inside what
+            // might be someone's deliberately-named collection folder (e.g.
+            // "CreatorName_PresetCollection"). Unbundled/personal use keeps
+            // copies tidily separated in their own subfolder as before.
+            var presettingwayFolder = IsUsingBundledRulesFile()
+                ? Configuration.PresetsFolder
+                : Path.Combine(Configuration.PresetsFolder, "Presettingway");
+            Directory.CreateDirectory(presettingwayFolder);
+
+            var fileName = BuildTaggedPresetFileName(rule);
+            var targetPath = Path.Combine(presettingwayFolder, fileName);
+
+            // In bundled mode this saves flat into the same folder the source
+            // preset might already live in -- guard against the source and
+            // target resolving to the literal same file (File.Copy onto
+            // itself throws rather than being a harmless no-op).
+            if (string.Equals(Path.GetFullPath(rule.PresetPath), Path.GetFullPath(targetPath), StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Debug("Presettingway: tagged copy target is the same file as the source preset -- nothing to do.");
+                return;
+            }
+
+            if (File.Exists(targetPath))
+            {
+                var oldFolder = Path.Combine(presettingwayFolder, "Old");
+                Directory.CreateDirectory(oldFolder);
+                var archivedName = $"{Path.GetFileNameWithoutExtension(fileName)}_{DateTime.Now:yyyyMMdd_HHmmss}{Path.GetExtension(fileName)}";
+                File.Move(targetPath, Path.Combine(oldFolder, archivedName), overwrite: true);
+                Log.Information($"Presettingway: archived the previous '{fileName}' to Old/ before overwriting.");
+            }
+
+            File.Copy(rule.PresetPath, targetPath, overwrite: true);
+            Log.Information($"Presettingway: saved a tagged copy to '{targetPath}'.");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Presettingway: failed to save a tagged preset copy. The rule itself was saved fine either way.");
+        }
+    }
+
+    private static string BuildTaggedPresetFileName(PresetRule rule)
+    {
+        var zonePart = rule.TerritoryId.HasValue ? rule.TerritoryId.Value.ToString() : "Any";
+        var weatherPart = rule.WeatherId.HasValue ? rule.WeatherId.Value.ToString() : "Any";
+        var timePart = rule.TimeOfDayFilter.HasValue ? rule.TimeOfDayFilter.Value.ToString() : "Any";
+
+        var baseName = $"{zonePart}_{weatherPart}_{timePart}";
+
+        if (!string.IsNullOrWhiteSpace(rule.Label))
+        {
+            var sanitizedTag = SanitizeForFileName(rule.Label);
+            if (!string.IsNullOrEmpty(sanitizedTag))
+                baseName += $"_{sanitizedTag}";
+        }
+
+        return baseName + ".ini";
+    }
+
+    private static string SanitizeForFileName(string input)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        return new string(input.Where(c => !invalid.Contains(c)).ToArray()).Trim();
     }
 
     internal void RemoveRule(PresetRule rule)
@@ -328,10 +425,76 @@ public sealed class Plugin : IDalamudPlugin
 
     internal string ResolveRulesPath()
     {
+        var bundled = ResolveBundledRulesPath();
+        if (bundled != null)
+            return bundled;
+
         var configured = Configuration.RulesFilePath;
         return Path.IsPathRooted(configured)
             ? configured
             : Path.Combine(PluginInterface.GetPluginConfigDirectory(), configured);
+    }
+
+    /// <summary>
+    /// A presets folder can bundle its own rules file -- same filename as your
+    /// personal one, sitting right next to the presets themselves -- and if one
+    /// exists there, it takes precedence over %appdata%. That's what makes a
+    /// whole preset collection shareable as a single self-contained folder:
+    /// drop it in, point Presets Folder at it, get exactly that rule set, and
+    /// your own personal rules file underneath is completely untouched.
+    /// LoadRules/SaveRules both already go through ResolveRulesPath, so this
+    /// one check is all that's needed for both reading and writing to respect
+    /// the precedence -- including switching back the moment Presets Folder
+    /// points somewhere without a bundled file again.
+    /// </summary>
+    private string? ResolveBundledRulesPath()
+    {
+        if (string.IsNullOrWhiteSpace(Configuration.PresetsFolder))
+            return null;
+
+        var fileName = Path.GetFileName(Configuration.RulesFilePath);
+        if (string.IsNullOrEmpty(fileName))
+            return null;
+
+        var candidate = Path.Combine(Configuration.PresetsFolder, fileName);
+        return File.Exists(candidate) ? candidate : null;
+    }
+
+    /// <summary>Whether rules are currently being loaded from/saved to a bundled collection rather than the personal config.</summary>
+    internal bool IsUsingBundledRulesFile() => ResolveBundledRulesPath() != null;
+
+    /// <summary>
+    /// Explicitly starts a portable collection in the current presets folder:
+    /// writes the rules you have right now out to a bundled rules file there,
+    /// after which ResolveRulesPath picks it up automatically for everything
+    /// from this point on. Without this, there'd be no way to *begin* building
+    /// a shareable collection -- adding rules would just keep saving to your
+    /// personal file until a bundled one already existed to switch onto.
+    /// </summary>
+    internal bool TryCreateBundledRulesFile()
+    {
+        if (string.IsNullOrWhiteSpace(Configuration.PresetsFolder))
+        {
+            Log.Warning("Presettingway: can't start a bundled rules file -- no presets folder is set.");
+            return false;
+        }
+
+        try
+        {
+            var fileName = Path.GetFileName(Configuration.RulesFilePath);
+            var targetPath = Path.Combine(Configuration.PresetsFolder, fileName);
+            Directory.CreateDirectory(Configuration.PresetsFolder);
+            var json = JsonSerializer.Serialize(RulesEditable, JsonOptions);
+            File.WriteAllText(targetPath, json);
+            Log.Information($"Presettingway: started a bundled rules file at '{targetPath}'.");
+            LoadRules(); // re-resolve so everything (including the UI) reflects the switch immediately
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Presettingway: failed to create a bundled rules file.");
+            return false;
+        }
     }
 
     /// <summary>

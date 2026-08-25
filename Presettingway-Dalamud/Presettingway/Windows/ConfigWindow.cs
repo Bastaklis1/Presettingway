@@ -91,6 +91,7 @@ public class ConfigWindow : Window, IDisposable
         {
             config.PresetsFolder = Plugin.CleanPathInput(presetsFolderInput);
             config.Save();
+            plugin.LoadRules(); // switching folders should immediately reflect whichever rules file now applies
         }
         if (ImGui.Button("Browse...##PresetsFolderBrowse"))
         {
@@ -103,6 +104,7 @@ public class ConfigWindow : Window, IDisposable
                     presetsFolderInput = path;
                     config.PresetsFolder = path;
                     config.Save();
+                    plugin.LoadRules();
                 });
         }
         if (!string.IsNullOrWhiteSpace(config.PresetsFolder))
@@ -111,6 +113,20 @@ public class ConfigWindow : Window, IDisposable
             if (ImGui.Button("Copy path##PresetsFolderCopy"))
                 ImGui.SetClipboardText(config.PresetsFolder);
         }
+
+        var saveTaggedCopies = config.SaveTaggedPresetCopies;
+        if (ImGui.Checkbox("Also save a tagged copy of each preset used in a rule", ref saveTaggedCopies))
+        {
+            config.SaveTaggedPresetCopies = saveTaggedCopies;
+            config.Save();
+        }
+        ImGui.TextWrapped(
+            "Off by default. When on, adding a rule also copies its preset alongside your presets, " +
+            "named \"ZoneId_WeatherId_TimeOfDay[_Label].ini\" (e.g. \"132_2_Day.ini\") -- self-describing " +
+            "and easy to share. If this folder has its own bundled rules file (see below), copies save " +
+            "flat into it directly; otherwise they go in a \"Presettingway\" subfolder so they stay " +
+            "separate from whatever else lives here. Never overwrites silently: an existing file with " +
+            "that name gets moved into an \"Old\" subfolder first.");
 
         ImGui.Separator();
         var checkWeatherman = config.CheckWeathermanOverrides;
@@ -137,7 +153,8 @@ public class ConfigWindow : Window, IDisposable
 
         ImGui.Separator();
         var rulesPath = plugin.ResolveRulesPath();
-        ImGui.TextUnformatted($"Rules file: {rulesPath}");
+        var isBundled = plugin.IsUsingBundledRulesFile();
+        ImGui.TextUnformatted(isBundled ? $"Rules file (bundled with presets folder): {rulesPath}" : $"Rules file (personal): {rulesPath}");
         if (ImGui.Button("Copy path##RulesFileCopy"))
             ImGui.SetClipboardText(rulesPath);
         ImGui.SameLine();
@@ -145,6 +162,21 @@ public class ConfigWindow : Window, IDisposable
         {
             if (plugin.LoadRules())
                 Plugin.ChatGui.Print($"[Presettingway] Reloaded — {plugin.RulesEditable.Count} rule(s) now loaded.");
+        }
+
+        if (!isBundled && !string.IsNullOrWhiteSpace(config.PresetsFolder))
+        {
+            ImGui.TextWrapped(
+                "Want to share your current rules + presets as one self-contained folder? This writes " +
+                "your rules out to the presets folder itself, which then takes precedence over your " +
+                "personal rules file for as long as Presets Folder points at it -- anyone who points " +
+                "Presettingway at that same folder gets exactly this rule set, with their own personal " +
+                "rules file completely untouched underneath.");
+            if (ImGui.Button("Start a portable rules file here"))
+            {
+                if (plugin.TryCreateBundledRulesFile())
+                    Plugin.ChatGui.Print("[Presettingway] Started a bundled rules file in your presets folder.");
+            }
         }
     }
 
