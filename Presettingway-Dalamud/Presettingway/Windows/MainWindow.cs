@@ -55,6 +55,7 @@ public class MainWindow : Window, IDisposable
 
     private string presetPathInput = string.Empty;
     private string labelInput = string.Empty;
+    private string newCollectionNameInput = string.Empty;
 
     // Set when "Edit" is clicked on a saved rule -- the original is removed
     // immediately and its values loaded back into the form above, so "editing"
@@ -77,11 +78,125 @@ public class MainWindow : Window, IDisposable
 
     public override void Draw()
     {
-        DrawStatus();
+        DrawHeader();
         ImGui.Separator();
-        DrawAddRuleForm();
-        ImGui.Separator();
-        DrawRulesList();
+
+        if (ImGui.BeginTabBar("PresettingwayTabs"))
+        {
+            if (ImGui.BeginTabItem("Status & Add Rule"))
+            {
+                DrawStatus();
+                ImGui.Separator();
+                DrawAddRuleForm();
+                ImGui.EndTabItem();
+            }
+
+            if (ImGui.BeginTabItem("Rules & Collections"))
+            {
+                DrawCollectionsSection();
+                ImGui.Separator();
+                DrawRulesList();
+                ImGui.EndTabItem();
+            }
+
+            ImGui.EndTabBar();
+        }
+    }
+
+    /// <summary>
+    /// Always visible above the tabs, rather than buried inside whichever tab
+    /// happens to be open: Settings, and the Weatherman checkbox (moved here
+    /// from Settings since it's something you'll actually flip during a
+    /// session, not a one-time setup choice). Deliberately no descriptive
+    /// text under the checkbox -- just the checkbox, right-aligned in the
+    /// remaining space next to Settings.
+    /// </summary>
+    private void DrawHeader()
+    {
+        if (ImGui.Button("Settings"))
+            plugin.OpenSettings();
+
+        ImGui.SameLine();
+        const string weathermanLabel = "Use Weatherman";
+        var checkboxWidth = ImGui.CalcTextSize(weathermanLabel).X + ImGui.GetFrameHeight() + ImGui.GetStyle().ItemInnerSpacing.X;
+        var avail = ImGui.GetContentRegionAvail().X;
+        if (avail > checkboxWidth)
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + avail - checkboxWidth);
+
+        var checkWeatherman = plugin.Configuration.CheckWeathermanOverrides;
+        if (ImGui.Checkbox(weathermanLabel, ref checkWeatherman))
+        {
+            plugin.Configuration.CheckWeathermanOverrides = checkWeatherman;
+            plugin.Configuration.Save();
+        }
+    }
+
+    /// <summary>
+    /// Lets you see and switch which collection (or Local mode) is active,
+    /// and create new ones, without going into Settings -- this is meant to
+    /// be used often as a collection grows, unlike the mode choice itself
+    /// (Local vs Collection at all), which stays a Settings-level decision.
+    /// </summary>
+    private void DrawCollectionsSection()
+    {
+        var config = plugin.Configuration;
+        var isCollection = config.RulesMode == RulesMode.Collection;
+
+        ImGui.TextUnformatted(isCollection
+            ? $"Active: Collection \"{config.ActiveCollectionName}\""
+            : "Active: Local (personal) rules");
+
+        if (string.IsNullOrWhiteSpace(config.PresetsFolder))
+        {
+            ImGui.TextWrapped("Set a presets folder in Settings first -- collections live under it and have nowhere to go without one.");
+            return;
+        }
+
+        var collections = plugin.ListCollections().ToArray();
+        if (collections.Length > 0)
+        {
+            var currentIndex = isCollection ? Array.IndexOf(collections, config.ActiveCollectionName) : -1;
+            var preview = currentIndex >= 0 ? collections[currentIndex] : "(select a collection)";
+
+            ImGui.SetNextItemWidth(220);
+            if (ImGui.BeginCombo("Active collection", preview))
+            {
+                foreach (var name in collections)
+                {
+                    if (ImGui.Selectable(name, name == config.ActiveCollectionName && isCollection))
+                        plugin.SwitchToCollection(name);
+                }
+                ImGui.EndCombo();
+            }
+
+            if (isCollection)
+            {
+                ImGui.SameLine();
+                if (ImGui.Button("Switch to Local"))
+                    plugin.SwitchToLocalMode();
+            }
+        }
+        else if (isCollection)
+        {
+            // Shouldn't normally happen (active collection but none listed --
+            // e.g. its folder got deleted outside Presettingway) but keep an
+            // escape hatch visible rather than a dead end.
+            if (ImGui.Button("Switch to Local"))
+                plugin.SwitchToLocalMode();
+        }
+
+        ImGui.Spacing();
+        ImGui.SetNextItemWidth(220);
+        ImGui.InputTextWithHint("##NewCollectionName", "New collection name...", ref newCollectionNameInput, 64);
+        ImGui.SameLine();
+        if (ImGui.Button("Make New Collection"))
+        {
+            if (plugin.TryCreateCollection(newCollectionNameInput))
+            {
+                Plugin.ChatGui.Print($"[Presettingway] Created and switched to collection \"{plugin.Configuration.ActiveCollectionName}\".");
+                newCollectionNameInput = string.Empty;
+            }
+        }
     }
 
     /// <summary>
@@ -112,9 +227,6 @@ public class MainWindow : Window, IDisposable
     private void DrawStatus()
     {
         var w = plugin.Watcher;
-
-        if (ImGui.Button("Settings"))
-            plugin.OpenSettings();
 
         DrawThreeColumns("StatusRow1",
             () => ImGui.TextUnformatted($"Zone: {plugin.GetZoneName(w.CurrentTerritoryId)} ({w.CurrentTerritoryId})"),

@@ -114,31 +114,36 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.SetClipboardText(config.PresetsFolder);
         }
 
-        var saveTaggedCopies = config.SaveTaggedPresetCopies;
-        if (ImGui.Checkbox("Also save a tagged copy of each preset used in a rule", ref saveTaggedCopies))
-        {
-            config.SaveTaggedPresetCopies = saveTaggedCopies;
-            config.Save();
-        }
-        ImGui.TextWrapped(
-            "Off by default. When on, adding a rule also copies its preset alongside your presets, " +
-            "named \"ZoneId_WeatherId_TimeOfDay[_Label].ini\" (e.g. \"132_2_Day.ini\") -- self-describing " +
-            "and easy to share. If this folder has its own bundled rules file (see below), copies save " +
-            "flat into it directly; otherwise they go in a \"Presettingway\" subfolder so they stay " +
-            "separate from whatever else lives here. Never overwrites silently: an existing file with " +
-            "that name gets moved into an \"Old\" subfolder first.");
-
         ImGui.Separator();
-        var checkWeatherman = config.CheckWeathermanOverrides;
-        if (ImGui.Checkbox("Check for Weatherman overrides", ref checkWeatherman))
+        ImGui.TextUnformatted("Rules mode:");
+        var isCollection = config.RulesMode == RulesMode.Collection;
+
+        if (ImGui.RadioButton("Local (personal, %appdata%)", !isCollection))
         {
-            config.CheckWeathermanOverrides = checkWeatherman;
-            config.Save();
+            plugin.SwitchToLocalMode();
         }
-        ImGui.TextWrapped(
-            "Off by default: Presettingway won't touch Weatherman at all unless this is checked. " +
-            "When on, and Weatherman has an active override, its weather/time show up alongside " +
-            "the real values above and are what actually drive preset switching.");
+        ImGui.SameLine();
+        if (ImGui.RadioButton("Collection (shareable folder)", isCollection))
+        {
+            // Only actually flips the mode if a collection already exists to
+            // switch into -- creating the first one is a Main Window action
+            // ("Make New Collection"), not something this radio button can
+            // do on its own without a name to give it.
+            if (!isCollection)
+            {
+                var existing = plugin.ListCollections();
+                if (existing.Count > 0)
+                    plugin.SwitchToCollection(existing[0]);
+                else
+                    Plugin.ChatGui.Print("[Presettingway] No collections exist yet -- use \"Make New Collection\" in the main window first.");
+            }
+        }
+        ImGui.TextWrapped(isCollection
+            ? $"Active collection: \"{config.ActiveCollectionName}\". Rules and tagged preset copies both live in " +
+              "PresetsFolder\\Presettingway\\ under that name -- zip that one subfolder to share it. " +
+              "Manage and switch between collections from the main window."
+            : "Rules live in your personal %appdata% file, same as always. No preset copies are saved, " +
+              "and PresetsFolder\\Presettingway\\ is left alone entirely.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("Default preset (optional -- used when no rule matches at all):");
@@ -153,8 +158,7 @@ public class ConfigWindow : Window, IDisposable
 
         ImGui.Separator();
         var rulesPath = plugin.ResolveRulesPath();
-        var isBundled = plugin.IsUsingBundledRulesFile();
-        ImGui.TextUnformatted(isBundled ? $"Rules file (bundled with presets folder): {rulesPath}" : $"Rules file (personal): {rulesPath}");
+        ImGui.TextUnformatted(isCollection ? $"Rules file (collection): {rulesPath}" : $"Rules file (local): {rulesPath}");
         if (ImGui.Button("Copy path##RulesFileCopy"))
             ImGui.SetClipboardText(rulesPath);
         ImGui.SameLine();
@@ -162,21 +166,6 @@ public class ConfigWindow : Window, IDisposable
         {
             if (plugin.LoadRules())
                 Plugin.ChatGui.Print($"[Presettingway] Reloaded — {plugin.RulesEditable.Count} rule(s) now loaded.");
-        }
-
-        if (!isBundled && !string.IsNullOrWhiteSpace(config.PresetsFolder))
-        {
-            ImGui.TextWrapped(
-                "Want to share your current rules + presets as one self-contained folder? This writes " +
-                "your rules out to the presets folder itself, which then takes precedence over your " +
-                "personal rules file for as long as Presets Folder points at it -- anyone who points " +
-                "Presettingway at that same folder gets exactly this rule set, with their own personal " +
-                "rules file completely untouched underneath.");
-            if (ImGui.Button("Start a portable rules file here"))
-            {
-                if (plugin.TryCreateBundledRulesFile())
-                    Plugin.ChatGui.Print("[Presettingway] Started a bundled rules file in your presets folder.");
-            }
         }
     }
 

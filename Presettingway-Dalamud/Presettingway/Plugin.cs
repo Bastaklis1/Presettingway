@@ -322,24 +322,166 @@ public sealed class Plugin : IDalamudPlugin
     }
 
     /// <summary>
-    /// Saves a copy of the rule's preset into PresetsFolder/Presettingway/,
-    /// named "{zoneId|Any}_{weatherId|Any}_{timeOfDay|Any}[_Label].ini".
-    /// Every rule that reaches this point already has one concrete
-    /// zone/weather/time combination -- multi-select weather/time-of-day
-    /// selections were already expanded into separate individual rules
-    /// before AddRule was ever called (see MainWindow.AddRuleFromForm's
-    /// cross-product loop) -- so there's no AND/OR ambiguity to encode here
-    /// at all. Never overwrites silently: any existing file at the target
-    /// name gets moved into an "Old" subfolder (timestamped) first.
+    /// The rules filename used inside every collection folder -- deliberately
+    /// the same literal name regardless of what a given person's own
+    /// personal RulesFilePath happens to be configured as, so every
+    /// collection is self-describing and interchangeable with any other
+    /// user's rather than depending on one person's local naming choice.
+    /// </summary>
+    private const string CollectionRulesFileName = "presettingway-rules.json";
+
+    /// <summary>
+    /// "&lt;PresetsFolder&gt;\Presettingway\", the root all collections live
+    /// under. Null if no presets folder is configured -- collections have
+    /// nowhere to go without one.
+    /// </summary>
+    internal string? GetPresettingwayFolder() =>
+        string.IsNullOrWhiteSpace(Configuration.PresetsFolder)
+            ? null
+            : Path.Combine(Configuration.PresetsFolder, "Presettingway");
+
+    /// <summary>
+    /// "&lt;PresetsFolder&gt;\Presettingway\&lt;ActiveCollectionName&gt;\" --
+    /// null if there's no presets folder, or no active collection name set.
+    /// Doesn't check the folder actually exists on disk; callers that need
+    /// to read/write rules create it as needed.
+    /// </summary>
+    internal string? GetActiveCollectionFolder()
+    {
+        var root = GetPresettingwayFolder();
+        if (root is null || string.IsNullOrWhiteSpace(Configuration.ActiveCollectionName))
+            return null;
+        return Path.Combine(root, Configuration.ActiveCollectionName);
+    }
+
+    /// <summary>
+    /// Every existing collection name, found by listing subfolders of
+    /// "&lt;PresetsFolder&gt;\Presettingway\". Empty if there's no presets
+    /// folder, or the Presettingway folder doesn't exist yet (nothing's ever
+    /// been created).
+    /// </summary>
+    internal List<string> ListCollections()
+    {
+        var root = GetPresettingwayFolder();
+        if (root is null || !Directory.Exists(root))
+            return new List<string>();
+
+        return Directory.GetDirectories(root)
+            .Select(Path.GetFileName)
+            .Where(name => !string.IsNullOrEmpty(name))
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList()!;
+    }
+
+    /// <summary>
+    /// Creates a brand new, empty collection named <paramref name="name"/>
+    /// under "&lt;PresetsFolder&gt;\Presettingway\", switches RulesMode to
+    /// Collection, makes it the active one, and reloads rules (empty, since
+    /// the collection is new) so the UI reflects the switch immediately.
+    /// Fails if PresetsFolder isn't set, the name is blank/unsafe once
+    /// sanitized, or a collection with that name already exists (use
+    /// SwitchToCollection to activate an existing one instead).
+    /// </summary>
+    internal bool TryCreateCollection(string name)
+    {
+        var root = GetPresettingwayFolder();
+        if (root is null)
+        {
+            Log.Warning("Presettingway: can't create a collection -- no presets folder is set in Settings.");
+            return false;
+        }
+
+        var sanitized = SanitizeForFileName(name);
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            Log.Warning("Presettingway: collection name is empty (or only contained characters that aren't valid in a folder name).");
+            return false;
+        }
+
+        var folder = Path.Combine(root, sanitized);
+        if (Directory.Exists(folder))
+        {
+            Log.Warning($"Presettingway: a collection named '{sanitized}' already exists -- switch to it instead of creating it again.");
+            return false;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(folder);
+            var emptyRulesJson = JsonSerializer.Serialize(new List<PresetRule>(), JsonOptions);
+            File.WriteAllText(Path.Combine(folder, CollectionRulesFileName), emptyRulesJson);
+
+            Configuration.RulesMode = RulesMode.Collection;
+            Configuration.ActiveCollectionName = sanitized;
+            Configuration.Save();
+            LoadRules();
+
+            Log.Information($"Presettingway: created and switched to collection '{sanitized}'.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, $"Presettingway: failed to create collection '{sanitized}'.");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Switches to an existing collection by name (must already exist under
+    /// PresetsFolder\Presettingway\ -- use TryCreateCollection for a new
+    /// one) and reloads rules so the UI reflects it immediately.
+    /// </summary>
+    internal bool SwitchToCollection(string name)
+    {
+        var root = GetPresettingwayFolder();
+        if (root is null || !Directory.Exists(Path.Combine(root, name)))
+        {
+            Log.Warning($"Presettingway: collection '{name}' doesn't exist -- can't switch to it.");
+            return false;
+        }
+
+        Configuration.RulesMode = RulesMode.Collection;
+        Configuration.ActiveCollectionName = name;
+        Configuration.Save();
+        LoadRules();
+        return true;
+    }
+
+    /// <summary>
+    /// Switches back to the personal Local rules file. The collection itself
+    /// (folder, rules file, tagged copies) is left completely untouched on
+    /// disk -- this only changes which one Presettingway currently reads
+    /// from and writes to.
+    /// </summary>
+    internal void SwitchToLocalMode()
+    {
+        Configuration.RulesMode = RulesMode.Local;
+        Configuration.Save();
+        LoadRules();
+    }
+
+    /// <summary>
+    /// In Collection mode, saves a copy of the rule's preset into the active
+    /// collection folder, named "{zoneId|Any}_{weatherId|Any}_{timeOfDay|Any}
+    /// [_Label].ini". A no-op entirely in Local mode -- tagged copies only
+    /// ever make sense as part of a shareable collection. Every rule that
+    /// reaches this point already has one concrete zone/weather/time
+    /// combination -- multi-select weather/time-of-day selections were
+    /// already expanded into separate individual rules before AddRule was
+    /// ever called (see MainWindow.AddRuleFromForm's cross-product loop) --
+    /// so there's no AND/OR ambiguity to encode here at all. Never
+    /// overwrites silently: any existing file at the target name gets moved
+    /// into that collection's own "Old" subfolder (timestamped) first.
     /// </summary>
     private void TrySavePresetCopy(PresetRule rule)
     {
-        if (!Configuration.SaveTaggedPresetCopies)
+        if (Configuration.RulesMode != RulesMode.Collection)
             return;
 
-        if (string.IsNullOrWhiteSpace(Configuration.PresetsFolder))
+        var collectionFolder = GetActiveCollectionFolder();
+        if (collectionFolder is null)
         {
-            Log.Warning("Presettingway: tagged preset copies are enabled, but no presets folder is set in Settings -- skipping.");
+            Log.Warning("Presettingway: Collection mode is on, but no collection is active yet -- use \"Make New Collection\" first. Skipping tagged copy.");
             return;
         }
 
@@ -351,24 +493,16 @@ public sealed class Plugin : IDalamudPlugin
 
         try
         {
-            // A folder already carrying its own bundled rules file is a
-            // self-contained collection -- save flat, directly into it,
-            // rather than nesting a "Presettingway" subfolder inside what
-            // might be someone's deliberately-named collection folder (e.g.
-            // "CreatorName_PresetCollection"). Unbundled/personal use keeps
-            // copies tidily separated in their own subfolder as before.
-            var presettingwayFolder = IsUsingBundledRulesFile()
-                ? Configuration.PresetsFolder
-                : Path.Combine(Configuration.PresetsFolder, "Presettingway");
-            Directory.CreateDirectory(presettingwayFolder);
+            Directory.CreateDirectory(collectionFolder);
 
             var fileName = BuildTaggedPresetFileName(rule);
-            var targetPath = Path.Combine(presettingwayFolder, fileName);
+            var targetPath = Path.Combine(collectionFolder, fileName);
 
-            // In bundled mode this saves flat into the same folder the source
-            // preset might already live in -- guard against the source and
-            // target resolving to the literal same file (File.Copy onto
-            // itself throws rather than being a harmless no-op).
+            // The collection folder is often also where the source preset
+            // already lives once a collection's been in use for a while --
+            // guard against source and target resolving to the literal same
+            // file (File.Copy onto itself throws rather than being a
+            // harmless no-op).
             if (string.Equals(Path.GetFullPath(rule.PresetPath), Path.GetFullPath(targetPath), StringComparison.OrdinalIgnoreCase))
             {
                 Log.Debug("Presettingway: tagged copy target is the same file as the source preset -- nothing to do.");
@@ -377,7 +511,7 @@ public sealed class Plugin : IDalamudPlugin
 
             if (File.Exists(targetPath))
             {
-                var oldFolder = Path.Combine(presettingwayFolder, "Old");
+                var oldFolder = Path.Combine(collectionFolder, "Old");
                 Directory.CreateDirectory(oldFolder);
                 var archivedName = $"{Path.GetFileNameWithoutExtension(fileName)}_{DateTime.Now:yyyyMMdd_HHmmss}{Path.GetExtension(fileName)}";
                 File.Move(targetPath, Path.Combine(oldFolder, archivedName), overwrite: true);
@@ -423,78 +557,31 @@ public sealed class Plugin : IDalamudPlugin
         SaveRules();
     }
 
+    /// <summary>
+    /// In Collection mode with an active collection, that collection's own
+    /// rules file -- which is what makes a whole collection shareable as a
+    /// single self-contained folder: drop it in, point Presets Folder + the
+    /// active collection at it, get exactly that rule set. Otherwise (Local
+    /// mode, or Collection mode with nothing active yet -- e.g. right after
+    /// PresetsFolder gets cleared out from under an active collection) falls
+    /// back to the personal %appdata% file, so there's always somewhere
+    /// valid to read/write rather than throwing. LoadRules/SaveRules both
+    /// already go through this one method, so it's the single place both
+    /// reading and writing need to agree on.
+    /// </summary>
     internal string ResolveRulesPath()
     {
-        var bundled = ResolveBundledRulesPath();
-        if (bundled != null)
-            return bundled;
+        if (Configuration.RulesMode == RulesMode.Collection)
+        {
+            var collectionFolder = GetActiveCollectionFolder();
+            if (collectionFolder != null)
+                return Path.Combine(collectionFolder, CollectionRulesFileName);
+        }
 
         var configured = Configuration.RulesFilePath;
         return Path.IsPathRooted(configured)
             ? configured
             : Path.Combine(PluginInterface.GetPluginConfigDirectory(), configured);
-    }
-
-    /// <summary>
-    /// A presets folder can bundle its own rules file -- same filename as your
-    /// personal one, sitting right next to the presets themselves -- and if one
-    /// exists there, it takes precedence over %appdata%. That's what makes a
-    /// whole preset collection shareable as a single self-contained folder:
-    /// drop it in, point Presets Folder at it, get exactly that rule set, and
-    /// your own personal rules file underneath is completely untouched.
-    /// LoadRules/SaveRules both already go through ResolveRulesPath, so this
-    /// one check is all that's needed for both reading and writing to respect
-    /// the precedence -- including switching back the moment Presets Folder
-    /// points somewhere without a bundled file again.
-    /// </summary>
-    private string? ResolveBundledRulesPath()
-    {
-        if (string.IsNullOrWhiteSpace(Configuration.PresetsFolder))
-            return null;
-
-        var fileName = Path.GetFileName(Configuration.RulesFilePath);
-        if (string.IsNullOrEmpty(fileName))
-            return null;
-
-        var candidate = Path.Combine(Configuration.PresetsFolder, fileName);
-        return File.Exists(candidate) ? candidate : null;
-    }
-
-    /// <summary>Whether rules are currently being loaded from/saved to a bundled collection rather than the personal config.</summary>
-    internal bool IsUsingBundledRulesFile() => ResolveBundledRulesPath() != null;
-
-    /// <summary>
-    /// Explicitly starts a portable collection in the current presets folder:
-    /// writes the rules you have right now out to a bundled rules file there,
-    /// after which ResolveRulesPath picks it up automatically for everything
-    /// from this point on. Without this, there'd be no way to *begin* building
-    /// a shareable collection -- adding rules would just keep saving to your
-    /// personal file until a bundled one already existed to switch onto.
-    /// </summary>
-    internal bool TryCreateBundledRulesFile()
-    {
-        if (string.IsNullOrWhiteSpace(Configuration.PresetsFolder))
-        {
-            Log.Warning("Presettingway: can't start a bundled rules file -- no presets folder is set.");
-            return false;
-        }
-
-        try
-        {
-            var fileName = Path.GetFileName(Configuration.RulesFilePath);
-            var targetPath = Path.Combine(Configuration.PresetsFolder, fileName);
-            Directory.CreateDirectory(Configuration.PresetsFolder);
-            var json = JsonSerializer.Serialize(RulesEditable, JsonOptions);
-            File.WriteAllText(targetPath, json);
-            Log.Information($"Presettingway: started a bundled rules file at '{targetPath}'.");
-            LoadRules(); // re-resolve so everything (including the UI) reflects the switch immediately
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Presettingway: failed to create a bundled rules file.");
-            return false;
-        }
     }
 
     /// <summary>

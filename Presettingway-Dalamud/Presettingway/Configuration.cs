@@ -47,14 +47,20 @@ public class Configuration : IPluginConfiguration
     public bool CheckWeathermanOverrides { get; set; } = false;
 
     /// <summary>
-    /// When true, every rule you add also saves a copy of its preset into a
-    /// "Presettingway" subfolder of PresetsFolder, named after the rule's
-    /// zone/weather/time so the copies are self-describing and shareable.
-    /// Off by default; requires PresetsFolder to be set. Never destroys an
-    /// existing copy -- see Plugin.TrySavePresetCopy, which archives anything
-    /// it would otherwise overwrite into an "Old" subfolder first.
+    /// Local (the original per-person %appdata% rules file) or Collection (a
+    /// named, shareable folder under PresetsFolder\Presettingway\). See
+    /// RulesMode for details on each. Local by default so nothing changes
+    /// for anyone updating from before collections existed.
     /// </summary>
-    public bool SaveTaggedPresetCopies { get; set; } = false;
+    public RulesMode RulesMode { get; set; } = RulesMode.Local;
+
+    /// <summary>
+    /// Name of the active collection subfolder under
+    /// PresetsFolder\Presettingway\ when RulesMode is Collection. Empty
+    /// until "Make New Collection" or switching to an existing one is used.
+    /// Ignored entirely in Local mode.
+    /// </summary>
+    public string ActiveCollectionName { get; set; } = string.Empty;
 
     // Eorzea-hour (0-24, wraps at 24) cutoffs for each time-of-day bucket.
     // Deliberately NOT hardcoded elsewhere: nobody's stated numbers (Google's,
