@@ -46,6 +46,22 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool CheckWeathermanOverrides { get; set; } = false;
 
+    /// <summary>
+    /// Local (the original per-person %appdata% rules file) or Collection (a
+    /// named, shareable folder under PresetsFolder\Presettingway\). See
+    /// RulesMode for details on each. Local by default so nothing changes
+    /// for anyone updating from before collections existed.
+    /// </summary>
+    public RulesMode RulesMode { get; set; } = RulesMode.Local;
+
+    /// <summary>
+    /// Name of the active collection subfolder under
+    /// PresetsFolder\Presettingway\ when RulesMode is Collection. Empty
+    /// until "Make New Collection" or switching to an existing one is used.
+    /// Ignored entirely in Local mode.
+    /// </summary>
+    public string ActiveCollectionName { get; set; } = string.Empty;
+
     // Eorzea-hour (0-24, wraps at 24) cutoffs for each time-of-day bucket.
     // Deliberately NOT hardcoded elsewhere: nobody's stated numbers (Google's,
     // mine, or anyone else's) should be trusted over what you actually observe
